@@ -1,8 +1,8 @@
 <template>
   <div>
     <div v-if="isNasMode" class="mb-4 rounded-xl bg-neutral-100 dark:bg-neutral-900 px-4 py-3 text-sm flex flex-wrap gap-3 items-center" role="status">
-      <span>{{ nasSourcesReady ? `已从 NAS 读取 ${setData.lxMusicScripts?.length || 0} 个音源` : nasSyncError || '正在读取 NAS 音源配置…' }}</span>
-      <button class="text-primary font-semibold" :disabled="reloadingSources" @click="reloadSources">{{ reloadingSources ? '读取中…' : '重新读取音源' }}</button>
+      <span>{{ nasSyncError || (nasSourcesReady ? `已自动同步 ${setData.lxMusicScripts?.length || 0} 个音源` : '正在自动同步 NAS 音源…') }}</span>
+      <button v-if="nasSyncError" class="text-primary font-semibold" :disabled="reloadingSources" @click="reloadSources">{{ reloadingSources ? '连接中…' : '立即重试' }}</button>
     </div>
     <setting-section :title="t('settings.sections.playback')">
       <setting-item
@@ -123,7 +123,7 @@ import { useI18n } from 'vue-i18n';
 
 import AudioDeviceSettings from '@/components/settings/AudioDeviceSettings.vue';
 import MusicSourceSettings from '@/components/settings/MusicSourceSettings.vue';
-import { isNasMode, nasSourcesReady, nasSyncError, reloadNasSources } from '@/services/nasClient';
+import { isNasMode, nasSourcesReady, nasSyncError, reloadNasSources, refreshNasConnection } from '@/services/nasClient';
 import { type Platform } from '@/types/music';
 import { isElectron } from '@/utils';
 import { LYRIC_CONFIG_CHANGE_EVENT, readLyricConfig, writeLyricConfig } from '@/utils/lyricConfig';
@@ -164,6 +164,7 @@ const handleLyricConfigChange = () => {
 
 onMounted(() => {
   window.addEventListener(LYRIC_CONFIG_CHANGE_EVENT, handleLyricConfigChange);
+  void refreshNasConnection();
 });
 
 onBeforeUnmount(() => {

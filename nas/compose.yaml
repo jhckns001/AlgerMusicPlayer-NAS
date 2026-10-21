@@ -5,7 +5,7 @@ services:
     build:
       context: ..
       dockerfile: nas/Dockerfile
-    image: alger-music-nas:0.3.3
+    image: alger-music-nas:0.3.4
     ports:
       - "${NAS_BIND_IP:-0.0.0.0}:${ALGER_PORT:-18080}:8080"
     environment:

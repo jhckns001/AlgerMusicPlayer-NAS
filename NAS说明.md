@@ -1,6 +1,6 @@
 # NAS 部署说明
 
-本分支基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 5.1.0，基线提交 `b15617ce8652e12a4314be66e2c35ff1f7602a10`。NAS 版本为 0.3.3。
+本分支基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 5.1.0，基线提交 `b15617ce8652e12a4314be66e2c35ff1f7602a10`。NAS 版本为 0.3.4。
 
 ## 安装入口
 
@@ -28,6 +28,12 @@
 网易云由所用网易云 API 提供。QQ、酷狗的元数据由 [TuneWeave](https://github.com/MOPELotus/TuneWeave) 提供；播放解析使用用户导入并启用的脚本。搜索成功与脚本解析成功是两个独立步骤。
 
 自动切换按音质和音源优先级尝试，限制单次及总等待时间，并探测返回内容是否为音频。默认优先 FLAC，已保存的音质设置继续保留。
+
+## 自动同步
+
+手机返回前台、恢复网络及打开音源设置时立即检查，页面可见时每 15 秒检查一次修订号，有变化才重新读取脚本。首次读取或连接失败后自动重试；同步不会刷新整个页面或重置播放进度。正常状态无需点击“重新读取音源”，只有出错时显示“立即重试”。
+
+更新前已打开的旧页面仍需重新打开或刷新一次，以加载新版自动同步代码。
 
 ## 排查入口
 

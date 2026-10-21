@@ -809,6 +809,7 @@ watch(
   () => props.show,
   (newVal: boolean) => {
     visible.value = newVal;
+    if (newVal && isNasMode) void refreshNasConnection();
   }
 );
 

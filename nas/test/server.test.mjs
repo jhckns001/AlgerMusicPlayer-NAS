@@ -72,6 +72,7 @@ test('authenticated LX calls, shared configuration and audio Range work without 
   const settings = { musicQuality: 'lossless', lxMusicScripts: [{ id: 'demo', script: 'lx.on(...)' }],
     activeLxMusicApiId: 'demo', enableMusicUnblock: true, enabledMusicSources: ['lxMusic'] };
   assert.equal((await call('/nas/sources', { revision: 0, settings }, 'PUT', auth)).status, 200);
+  assert.equal((await (await call('/nas/status', undefined, 'GET', auth)).json()).sourceRevision, 1);
   assert.equal((await call('/nas/sources', { revision: 0, settings }, 'PUT', auth)).status, 409);
   const saved = JSON.parse(await readFile(path.join(directory, 'sources.json'), 'utf8'));
   assert.equal(saved.settings.lxMusicScripts[0].id, 'demo');

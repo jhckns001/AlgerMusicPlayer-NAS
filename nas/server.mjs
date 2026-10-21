@@ -80,8 +80,8 @@ export function createNasServer({ dataDir = path.join(root, 'nas-data'),
     try {
       url = new URL(req.url, 'http://localhost');
       const route = url.pathname;
-      if (route === '/health') return json(res, 200, { status: 'ok', version: '0.3.3', lx: 'worker' });
-      if (route === '/nas/status') return json(res, 200, { authorized: authorized(req), authRequired: requireAuth, version: '0.3.3', instanceId });
+      if (route === '/health') return json(res, 200, { status: 'ok', version: '0.3.4', lx: 'worker' });
+      if (route === '/nas/status') return json(res, 200, { authorized: authorized(req), authRequired: requireAuth, version: '0.3.4', instanceId, sourceRevision: authorized(req) ? sourceState.revision : undefined });
       if (route.startsWith('/nas/')) {
         if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
           throw fail('不允许跨站请求', 403);
@@ -251,7 +251,7 @@ async function start() {
     accessKey: process.env.NAS_ACCESS_KEY,
     staticDir: process.env.STATIC_DIR || path.join(root, 'out/nas') });
   server.listen(Number(process.env.PORT || 8080), process.env.HOST || '0.0.0.0', () =>
-    console.log(`alger-music 0.3.3 listening on ${server.address().port}`));
+    console.log(`alger-music 0.3.4 listening on ${server.address().port}`));
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () =>
     server.close(() => { catalogChild?.kill(); process.exit(0); }));
   process.on('exit', () => catalogChild?.kill());

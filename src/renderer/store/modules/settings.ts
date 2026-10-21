@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 
 import setDataDefault from '@/../main/set.json';
 import homeRouter from '@/router/home';
-import { isNasMode, nasConnected, nasConnectionRevision, nasSourceKeys, nasRequest, nasSyncError, nasSourcesReady, nasDefaultSourceSettings } from '@/services/nasClient';
+import { isNasMode, nasConnected, nasConnectionRevision, nasSourceKeys, nasRequest, nasSyncError, nasSourcesReady, nasDefaultSourceSettings, nasSourcesLoading, nasSourcesSaving, nasSourcesDirty, nasSourcesRevision } from '@/services/nasClient';
 import { useMenuStore } from '@/store/modules/menu';
 import { isElectron } from '@/utils';
 import {
@@ -88,40 +88,67 @@ export const useSettingsStore = defineStore('settings', () => {
     let ready = false;
     let revision = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let queue = Promise.resolve();
     let sourceRequest = 0;
+    let applyingRemote = false;
+    let confirmed = '';
+    const sourceSettings = () => Object.fromEntries(nasSourceKeys.map(key => [key, cloneDeep(setData.value[key])]));
+    const scheduleSave = (delay = 400) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(saveSources, delay);
+    };
+    const saveSources = async () => {
+      if (!ready || !nasConnected.value || nasSourcesSaving.value || !nasSourcesDirty.value) return;
+      const settings = sourceSettings();
+      const snapshot = JSON.stringify(settings);
+      if (snapshot === confirmed) { nasSourcesDirty.value = false; return; }
+      nasSourcesSaving.value = true;
+      let retryDelay = 400;
+      try {
+        const result = await nasRequest<{ revision: number }>('sources', { revision, settings }, 'PUT');
+        revision = result.revision;
+        nasSourcesRevision.value = revision;
+        confirmed = snapshot;
+        nasSyncError.value = '';
+      } catch (error: any) {
+        nasSyncError.value = error.message;
+        retryDelay = 5000;
+        if (error.status === 409) {
+          // The NAS has a newer edit. Read it instead of overwriting another device.
+          ready = false;
+          nasSourcesReady.value = false;
+        }
+      } finally {
+        nasSourcesSaving.value = false;
+        nasSourcesDirty.value = ready && JSON.stringify(sourceSettings()) !== confirmed;
+        if (!ready && nasConnected.value) nasConnectionRevision.value++;
+        else if (nasSourcesDirty.value) scheduleSave(retryDelay);
+      }
+    };
     watch([nasConnected, nasConnectionRevision], async ([connected]) => {
       const currentRequest = ++sourceRequest;
-      ready = false;
-      nasSourcesReady.value = false;
-      if (timer) clearTimeout(timer);
-      if (!connected) return;
+      if (!connected) { nasSourcesLoading.value = false; return; }
+      // A focus/poll refresh must not discard a pending local import or edit.
+      if (nasSourcesDirty.value || nasSourcesSaving.value) { scheduleSave(0); return; }
+      nasSourcesLoading.value = true;
       try {
         const remote = await nasRequest<{ revision: number; settings: Record<string, unknown> }>('sources');
-        if (currentRequest !== sourceRequest) return;
+        if (currentRequest !== sourceRequest || nasSourcesDirty.value || nasSourcesSaving.value) return;
         revision = remote.revision;
+        nasSourcesRevision.value = revision;
+        applyingRemote = true;
         setSetData({ ...nasDefaultSourceSettings, ...remote.settings });
+        confirmed = JSON.stringify(sourceSettings());
+        applyingRemote = false;
         ready = true;
         nasSourcesReady.value = true;
         nasSyncError.value = '';
-      } catch (error: any) { if (currentRequest === sourceRequest) nasSyncError.value = error.message; }
+      } catch (error: any) { if (currentRequest === sourceRequest) nasSyncError.value = '音源同步暂未完成，将自动重试：' + error.message; }
+      finally { if (currentRequest === sourceRequest) { applyingRemote = false; nasSourcesLoading.value = false; } }
     }, { immediate: true, flush: 'sync' });
     watch(() => nasSourceKeys.map(key => setData.value[key]), () => {
-      if (!ready || !nasConnected.value) return;
-      if (timer) clearTimeout(timer);
-      const generation = sourceRequest;
-      timer = setTimeout(() => {
-        if (generation !== sourceRequest) return;
-        const settings = Object.fromEntries(nasSourceKeys.map(key => [key, cloneDeep(setData.value[key])]));
-        queue = queue.then(async () => {
-          if (!ready || !nasConnected.value || generation !== sourceRequest) return;
-          const result = await nasRequest<{ revision: number }>('sources', { revision, settings }, 'PUT');
-          revision = result.revision;
-          nasSyncError.value = '';
-        }).catch((error: any) => { if (generation === sourceRequest) {
-          ready = false; nasSourcesReady.value = false; nasSyncError.value = error.message;
-        } });
-      }, 400);
+      if (!ready || applyingRemote) return;
+      nasSourcesDirty.value = JSON.stringify(sourceSettings()) !== confirmed;
+      if (nasSourcesDirty.value) scheduleSave();
     }, { deep: true, flush: 'sync' });
   }
 

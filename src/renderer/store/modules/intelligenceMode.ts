@@ -34,8 +34,10 @@ export const useIntelligenceModeStore = defineStore('intelligenceMode', () => {
     const playlistStore = usePlaylistStore();
     const { t } = i18n.global;
 
-    // 检查是否使用cookie登录
-    if (!userStore.user || userStore.loginType !== 'cookie') {
+    // QR login also establishes an authenticated NetEase cookie; UID alone does not.
+    const authenticated = ['cookie', 'qr', 'token'].includes(userStore.loginType || '') &&
+      Boolean(localStorage.getItem('token')?.trim());
+    if (!userStore.user || !authenticated) {
       message.warning(t('player.playBar.intelligenceMode.needCookieLogin'));
       return;
     }

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { createNasServer } from '../server.mjs';
@@ -93,6 +93,27 @@ test('authenticated LX calls, shared configuration and audio Range work without 
   assert.equal(range.headers.get('content-range'), `bytes 4-9/${audio.length}`);
   assert.equal(await range.text(), '012345');
   assert.equal((await call('/nas/sources', undefined, 'GET', { ...auth, Origin: 'https://untrusted.example' })).status, 403);
+});
+
+test('a configured public origin works behind a proxy while other origins and forged forwarding headers are rejected', async t => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'alger-origin-test-'));
+  const origin = 'https://music.example.test:18443';
+  await writeFile(path.join(directory, 'public-origins.json'), JSON.stringify({ origins: [origin] }));
+  const server = createNasServer({ dataDir: directory, requireAuth: false });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise(r => server.close(r));
+    await rm(directory, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const headers = { Host: 'music.example.test', Origin: origin, 'Content-Type': 'application/json' };
+  assert.equal((await fetch(base + '/nas/sources', { headers })).status, 200);
+  assert.equal((await fetch(base + '/nas/sources', { method: 'PUT', headers,
+    body: JSON.stringify({ revision: 0, settings: { lxMusicScripts: [] } }) })).status, 200);
+  for (const other of ['https://evil.example', 'https://music.example.test:18444', 'null', 'invalid-origin']) {
+    const response = await fetch(base + '/nas/sources', { method: 'PUT',
+      headers: { ...headers, Origin: other, 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-Proto': 'https' },
+      body: JSON.stringify({ revision: 1, settings: { lxMusicScripts: [] } }) });
+    assert.equal(response.status, 403, other);
+  }
 });
 
 test('LAN preview permits direct source access without a key and still rejects cross-site writes', async t => {

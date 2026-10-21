@@ -2,7 +2,7 @@
 
 基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 制作的**非官方 NAS 网页适配版**。保留原版播放器体验，增加 NAS 直接导入 LX 音源、多脚本切换和多平台搜索。
 
-当前 NAS 版本：**0.3.4**。上游基线：**5.1.0**，提交 [`b15617ce`](https://github.com/algerkong/AlgerMusicPlayer/commit/b15617ce8652e12a4314be66e2c35ff1f7602a10)。这表示本项目采用的代码基线，不表示始终同步上游最新提交。
+当前 NAS 版本：**0.3.5**。上游基线：**5.1.0**，提交 [`b15617ce`](https://github.com/algerkong/AlgerMusicPlayer/commit/b15617ce8652e12a4314be66e2c35ff1f7602a10)。这表示本项目采用的代码基线，不表示始终同步上游最新提交。
 
 本仓库不附带真实音源脚本、音源下载链接、账号或个人配置。音源由使用者自行导入。
 
@@ -55,7 +55,7 @@ NAS_REQUIRE_AUTH=0
 NAS_ACCESS_KEY=
 ```
 
-`NAS_BIND_IP` 控制监听地址。默认无需为音源设置访问密钥；若需要限制 NAS 接口访问，设置 `NAS_REQUIRE_AUTH=1` 和自己的 `NAS_ACCESS_KEY`。详细行为见 [NAS 部署说明](NAS说明.md)。
+`NAS_BIND_IP` 控制监听地址。默认无需为音源设置访问密钥；若需要限制 NAS 接口访问，设置 `NAS_REQUIRE_AUTH=1` 和自己的 `NAS_ACCESS_KEY`。详细行为及反代地址配置见 [NAS 部署说明](NAS说明.md)。
 
 ### 导入音源
 
@@ -115,6 +115,7 @@ npm run start:nas
 ```sh
 npm run typecheck:web
 npm run test:nas
+npm test -- tests/musicListPage.test.ts tests/intelligenceMode.test.ts tests/nasAutoSync.test.ts
 ```
 
 ## 已知限制

@@ -122,6 +122,7 @@
               <!-- Play All Button -->
               <button
                 class="play-all-btn flex items-center gap-1.5 md:gap-2 px-3.5 md:px-6 py-1.5 md:py-2.5 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold text-xs md:text-sm transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg shadow-primary/25"
+                :disabled="loading || !isCurrentList()"
                 @click="handlePlayAll"
               >
                 <i class="ri-play-circle-line text-base md:text-lg" />
@@ -329,7 +330,7 @@
 <script setup lang="ts">
 import { useMessage } from 'naive-ui';
 import PinyinMatch from 'pinyin-match';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute } from 'vue-router';
 
@@ -363,16 +364,23 @@ const message = useMessage();
 const playHistoryStore = usePlayHistoryStore();
 
 const loading = ref(false);
+let detailRequest = 0;
 const isPlaying = computed(() => !!playerStore.playMusicUrl);
 const contentPaddingBottom = computed(() =>
   isPlaying.value && !isMobile.value ? '220px' : '80px'
 );
 
 const fetchData = async () => {
+  const request = ++detailRequest;
+  const page = route.fullPath;
+  const current = () => request === detailRequest && route.fullPath === page;
   const id = route.params.id;
   const type = route.query.type;
 
-  if (!id || type === 'dailyRecommend') return;
+  if (route.name !== 'musicList' || !id || type === 'dailyRecommend') {
+    loading.value = false;
+    return;
+  }
 
   // 检查是否需要加载数据
   if (
@@ -380,6 +388,7 @@ const fetchData = async () => {
     musicStore.currentMusicList &&
     musicStore.currentMusicList.length > 0
   ) {
+    loading.value = false;
     return;
   }
 
@@ -388,6 +397,7 @@ const fetchData = async () => {
     let data: any;
     if (type === 'album') {
       const res = await getAlbum(Number(id));
+      if (!current()) return;
       data = res.data;
       if (data.code === 200) {
         musicStore.setCurrentMusicList(
@@ -401,6 +411,7 @@ const fetchData = async () => {
       }
     } else if (type === 'playlist') {
       const res = await getListDetail(id.toString());
+      if (!current()) return;
       data = res.data;
       if (data.code === 200) {
         const playlist = data.playlist;
@@ -415,10 +426,11 @@ const fetchData = async () => {
       }
     }
   } catch (error) {
+    if (!current()) return;
     console.error('加载列表数据失败:', error);
     message.error(t('common.loadFailed'));
   } finally {
-    loading.value = false;
+    if (current()) loading.value = false;
   }
 };
 
@@ -427,7 +439,7 @@ watch(
   () => {
     fetchData();
   },
-  { immediate: true }
+  { immediate: true, flush: 'sync' }
 );
 const isDailyRecommend = computed(() => route.query.type === 'dailyRecommend');
 const isAlbum = computed(() => route.query.type === 'album');
@@ -468,6 +480,20 @@ const completePlaylist = ref<SongResult[]>([]);
 const hasMore = ref(true);
 const searchKeyword = ref('');
 const isFullPlaylistLoaded = ref(false);
+let listGeneration = 0;
+const listKey = () => `${String(route.name)}:${route.fullPath}:${listInfo.value?.id ?? ''}`;
+const captureListLoad = () => ({ generation: listGeneration, key: listKey() });
+type ListLoad = ReturnType<typeof captureListLoad>;
+const isCurrentLoad = (load: ListLoad) => load.generation === listGeneration && load.key === listKey();
+const isCurrentList = () => route.name === 'musicList' && (isDailyRecommend.value ||
+  String(listInfo.value?.id) === String(route.params.id));
+
+// Keep only this playlist's members, once each, in its published track order.
+const orderedSongs = (songs: SongResult[], ids?: Array<number | string>): SongResult[] => {
+  const order = ids || listInfo.value?.trackIds?.map((item: any) => item.id) || songs.map(song => song.id);
+  const byId = new Map(songs.map(song => [String(song.id), song]));
+  return [...new Set<string>(order.map(String))].flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
+};
 
 const isSelecting = ref(false);
 const selectedSongs = ref<number[]>([]);
@@ -523,7 +549,11 @@ const placeholderHeight = computed(() => {
 });
 
 const resetListState = () => {
-  loadedIds.value.clear();
+  listGeneration++;
+  fullPlaylistLoad = null;
+  loadingList.value = false;
+  isPlaylistLoading.value = false;
+  loadedIds.value = new Set();
   displayedSongs.value = [];
   completePlaylist.value = [];
   hasMore.value = true;
@@ -545,35 +575,38 @@ const formatSong = (item: any) => {
   };
 };
 
-const loadSongs = async (ids: number[], appendToList = true, updateComplete = false) => {
+const loadSongs = async (ids: number[], appendToList = true, updateComplete = false,
+  load = captureListLoad()) => {
   if (ids.length === 0) return [];
   try {
     const { data } = await getMusicDetail(ids);
+    if (!isCurrentLoad(load)) return [];
     if (data?.songs) {
-      const { songs } = data;
+      const songs = orderedSongs(data.songs, ids);
       songs.forEach((song: any) => loadedIds.value.add(song.id));
-      if (appendToList) displayedSongs.value.push(...songs);
-      if (updateComplete) completePlaylist.value.push(...songs);
+      if (appendToList) displayedSongs.value = orderedSongs([...displayedSongs.value, ...songs]);
+      if (updateComplete) completePlaylist.value = orderedSongs([...completePlaylist.value, ...songs]);
       return songs;
     }
   } catch (error) {
-    console.error('加载歌曲失败:', error);
+    if (isCurrentLoad(load)) console.error('加载歌曲失败:', error);
   }
   return [];
 };
 
 let fullPlaylistLoad: Promise<void> | null = null;
 
-const fetchFullPlaylist = async (): Promise<void> => {
+const fetchFullPlaylist = async (load: ListLoad): Promise<void> => {
   isPlaylistLoading.value = true;
   try {
     if (!listInfo.value?.trackIds) {
+      completePlaylist.value = [...displayedSongs.value];
       isFullPlaylistLoaded.value = true;
       return;
     }
     const allIds = listInfo.value.trackIds.map((item) => item.id);
     const loadedSongIds = new Set(displayedSongs.value.map((s) => s.id as number));
-    completePlaylist.value = [...displayedSongs.value];
+    completePlaylist.value = orderedSongs(displayedSongs.value, allIds);
     const unloadedIds = allIds.filter((id) => !loadedSongIds.has(id));
 
     if (unloadedIds.length === 0) {
@@ -584,27 +617,29 @@ const fetchFullPlaylist = async (): Promise<void> => {
     const batchSize = 500;
     for (let i = 0; i < unloadedIds.length; i += batchSize) {
       const batchIds = unloadedIds.slice(i, i + batchSize);
-      const loadedBatch = await loadSongs(batchIds, false, false);
+      const loadedBatch = await loadSongs(batchIds, false, false, load);
+      if (!isCurrentLoad(load)) return;
       if (loadedBatch.length > 0) {
-        displayedSongs.value = [...displayedSongs.value, ...loadedBatch];
-        completePlaylist.value = [...completePlaylist.value, ...loadedBatch];
+        displayedSongs.value = orderedSongs([...displayedSongs.value, ...loadedBatch], allIds);
+        completePlaylist.value = [...displayedSongs.value];
       }
     }
     isFullPlaylistLoaded.value = true;
     hasMore.value = false;
   } catch (error) {
-    console.error('加载完整播放列表失败:', error);
+    if (isCurrentLoad(load)) console.error('加载完整播放列表失败:', error);
   } finally {
-    isPlaylistLoading.value = false;
+    if (isCurrentLoad(load)) isPlaylistLoading.value = false;
   }
 };
 
 const loadFullPlaylist = (): Promise<void> => {
   if (isFullPlaylistLoaded.value) return Promise.resolve();
   if (!fullPlaylistLoad) {
-    fullPlaylistLoad = fetchFullPlaylist().finally(() => {
-      fullPlaylistLoad = null;
+    const task = fetchFullPlaylist(captureListLoad()).finally(() => {
+      if (fullPlaylistLoad === task) fullPlaylistLoad = null;
     });
+    fullPlaylistLoad = task;
   }
   return fullPlaylistLoad;
 };
@@ -612,10 +647,10 @@ const loadFullPlaylist = (): Promise<void> => {
 const completePlaybackQueue = async (): Promise<void> => {
   if (isFullPlaylistLoaded.value || searchKeyword.value) return;
   const queue = playerStore.playList;
-  const playlistId = listInfo.value?.id;
+  const load = captureListLoad();
   await loadFullPlaylist();
   // 用户换列表或编辑队列后，不用迟到的完整歌单覆盖其操作。
-  if (playerStore.playList !== queue || listInfo.value?.id !== playlistId) return;
+  if (playerStore.playList !== queue || !isCurrentLoad(load) || searchKeyword.value) return;
   const selectedSong = queue[playerStore.playListIndex];
   playerStore.setPlayList(allFilteredSongs.value.map(formatSong));
   if (selectedSong) {
@@ -625,13 +660,12 @@ const completePlaybackQueue = async (): Promise<void> => {
 };
 
 const handlePlayAll = () => {
-  if (displayedSongs.value.length === 0) return;
+  if (loading.value || !isCurrentList() || displayedSongs.value.length === 0) return;
   saveHistory();
   const list = searchKeyword.value
     ? filteredSongs.value
-    : isFullPlaylistLoaded.value
-      ? completePlaylist.value
-      : allFilteredSongs.value;
+    : allFilteredSongs.value;
+  if (list.length === 0) return;
   playerStore.setPlayList(list.map(formatSong));
   playerStore.setPlay(formatSong(list[0]));
   void completePlaybackQueue();
@@ -697,11 +731,13 @@ const handleScroll = (e: Event) => {
 
 const loadMoreSongs = async () => {
   if (
+    loadingList.value || isPlaylistLoading.value ||
     isFullPlaylistLoaded.value ||
     searchKeyword.value ||
     displayedSongs.value.length >= total.value
   )
     return;
+  const load = captureListLoad();
   loadingList.value = true;
   try {
     const start = displayedSongs.value.length;
@@ -711,13 +747,14 @@ const loadMoreSongs = async () => {
         .slice(start, end)
         .map((i) => i.id)
         .filter((id) => !loadedIds.value.has(id));
-      if (ids.length > 0) await loadSongs(ids);
+      if (ids.length > 0) await loadSongs(ids, true, false, load);
     }
+    if (!isCurrentLoad(load)) return;
     hasMore.value = displayedSongs.value.length < total.value;
     // 新数据加载后扩展渲染窗口
     renderLimit.value = displayedSongs.value.length;
   } finally {
-    loadingList.value = false;
+    if (isCurrentLoad(load)) loadingList.value = false;
   }
 };
 
@@ -906,19 +943,34 @@ const checkCollectionStatus = () => {
 };
 
 watch(
-  songList,
-  (newSongs) => {
+  [songList, listInfo],
+  ([newSongs]) => {
     resetListState();
     renderLimit.value = pageSize; // 重置 DOM 渲染窗口
-    if (newSongs.length > 0) {
-      displayedSongs.value = [...newSongs];
+    if (newSongs.length > 0 && isCurrentList()) {
+      displayedSongs.value = orderedSongs(newSongs);
       newSongs.forEach((s) => loadedIds.value.add(s.id));
     }
     hasMore.value = displayedSongs.value.length < total.value;
     checkCollectionStatus();
   },
-  { immediate: true }
+  { immediate: true, flush: 'sync' }
 );
+
+watch(() => route.fullPath, () => {
+  resetListState();
+  searchKeyword.value = '';
+  renderLimit.value = pageSize;
+  selectedSongs.value = [];
+  isSelecting.value = false;
+  if (isCurrentList()) {
+    displayedSongs.value = orderedSongs(songList.value);
+    displayedSongs.value.forEach(song => loadedIds.value.add(song.id as number));
+  }
+  hasMore.value = displayedSongs.value.length < total.value;
+}, { flush: 'sync' });
+
+onBeforeUnmount(() => { detailRequest++; resetListState(); });
 
 onMounted(checkCollectionStatus);
 </script>

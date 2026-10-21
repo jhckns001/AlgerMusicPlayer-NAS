@@ -1,6 +1,6 @@
 # NAS 部署说明
 
-本分支基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 5.1.0，基线提交 `b15617ce8652e12a4314be66e2c35ff1f7602a10`。NAS 版本为 0.3.4。
+本分支基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 5.1.0，基线提交 `b15617ce8652e12a4314be66e2c35ff1f7602a10`。NAS 版本为 0.3.5。
 
 ## 安装入口
 
@@ -22,6 +22,28 @@
 默认 `NAS_REQUIRE_AUTH=0`，无需填写密钥即可导入脚本。适用于已由使用者控制访问范围的部署。
 
 如设置 `NAS_REQUIRE_AUTH=1`，需同时设置非空的 `NAS_ACCESS_KEY`，并在网页的 NAS 访问配置中填写相同的值。此密钥用于本项目的 NAS 接口，不是网易云密码，也不是 LX 音源供应方的密钥。
+
+## 反向代理的公开地址
+
+如果通过反代域名访问，出现“不允许跨站请求”，检查公开网址与代理交给应用的 Host 是否一致。反代改写端口时，可以配置明确的公开来源：
+
+```dotenv
+NAS_PUBLIC_ORIGINS=https://music.example.com:18443
+```
+
+多个来源用逗号分隔。每项只填协议、域名和端口，不含路径、账号、密钥或查询参数。修改后重建容器。
+
+也可以在数据目录 `/data/public-origins.json` 写入以下配置，再重启应用：
+
+```json
+{"origins":["https://music.example.com:18443"]}
+```
+
+环境变量非空时优先于文件。未配置的外站请求仍会被拒绝；不需要关闭来源检查或使用通配符。
+
+## 网易云登录与心动模式
+
+心动模式使用网易云账号的“我喜欢的音乐”作为推荐依据，需要账号已有喜欢歌曲及有效扫码或 Cookie 登录。UID 登录不具备完整账号权限。手机与电脑的登录分别保存在各自浏览器中。
 
 ## 搜索和播放
 

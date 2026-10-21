@@ -29,7 +29,7 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 
 export function createNasServer({ dataDir = path.join(root, 'nas-data'),
   staticDir = path.join(root, 'out/nas'), accessKey, apiPort = 3001,
-  open = openPublic, catalog = createCatalogService(), requireAuth = process.env.NAS_REQUIRE_AUTH === '1' } = {}) {
+  open = openPublic, catalog = createCatalogService(), requireAuth = process.env.NAS_REQUIRE_AUTH === '1', publicOrigins } = {}) {
   mkdirSync(dataDir, { recursive: true });
   const loadCover = createCoverService({ open });
   const keyFile = path.join(dataDir, 'access-key');
@@ -37,6 +37,26 @@ export function createNasServer({ dataDir = path.join(root, 'nas-data'),
     randomBytes(24).toString('base64url'));
   if (!accessKey && !existsSync(keyFile)) writeFileSync(keyFile, key + '\n', { mode: 0o600 });
   const sourcesFile = path.join(dataDir, 'sources.json');
+  const publicOriginsFile = path.join(dataDir, 'public-origins.json');
+  const configuredOrigins = publicOrigins ?? (process.env.NAS_PUBLIC_ORIGINS
+    ? process.env.NAS_PUBLIC_ORIGINS.split(',').map(value => value.trim()).filter(Boolean)
+    : existsSync(publicOriginsFile) ? JSON.parse(readFileSync(publicOriginsFile, 'utf8')).origins : []);
+  if (!Array.isArray(configuredOrigins)) throw new Error('公开访问地址配置必须是 origins 数组');
+  const allowedOrigins = new Set(configuredOrigins.map(value => {
+    const origin = new URL(value);
+    if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password ||
+        origin.pathname !== '/' || origin.search || origin.hash) throw new Error('公开访问地址只能包含协议、主机和端口');
+    return origin.origin;
+  }));
+  const allowedOrigin = (req) => {
+    if (!req.headers.origin) return true;
+    try {
+      const origin = new URL(req.headers.origin);
+      if (!['http:', 'https:'].includes(origin.protocol) || origin.username || origin.password ||
+          origin.pathname !== '/' || origin.search || origin.hash) return false;
+      return origin.host === new URL(`http://${req.headers.host}`).host || allowedOrigins.has(origin.origin);
+    } catch { return false; }
+  };
   let sourceState = existsSync(sourcesFile) ? JSON.parse(readFileSync(sourcesFile, 'utf8')) :
     { revision: 0, settings: {} };
   let saveQueue = Promise.resolve();
@@ -80,10 +100,10 @@ export function createNasServer({ dataDir = path.join(root, 'nas-data'),
     try {
       url = new URL(req.url, 'http://localhost');
       const route = url.pathname;
-      if (route === '/health') return json(res, 200, { status: 'ok', version: '0.3.4', lx: 'worker' });
-      if (route === '/nas/status') return json(res, 200, { authorized: authorized(req), authRequired: requireAuth, version: '0.3.4', instanceId, sourceRevision: authorized(req) ? sourceState.revision : undefined });
+      if (route === '/health') return json(res, 200, { status: 'ok', version: '0.3.5', lx: 'worker' });
+      if (route === '/nas/status') return json(res, 200, { authorized: authorized(req), authRequired: requireAuth, version: '0.3.5', instanceId, sourceRevision: authorized(req) ? sourceState.revision : undefined });
       if (route.startsWith('/nas/')) {
-        if (req.headers.origin && new URL(req.headers.origin).host !== req.headers.host)
+        if (!allowedOrigin(req))
           throw fail('不允许跨站请求', 403);
         if (route === '/nas/cover' && ['GET', 'HEAD'].includes(req.method)) {
           const cover = await loadCover(url.searchParams.get('url'));
@@ -251,7 +271,7 @@ async function start() {
     accessKey: process.env.NAS_ACCESS_KEY,
     staticDir: process.env.STATIC_DIR || path.join(root, 'out/nas') });
   server.listen(Number(process.env.PORT || 8080), process.env.HOST || '0.0.0.0', () =>
-    console.log(`alger-music 0.3.4 listening on ${server.address().port}`));
+    console.log(`alger-music 0.3.5 listening on ${server.address().port}`));
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () =>
     server.close(() => { catalogChild?.kill(); process.exit(0); }));
   process.on('exit', () => catalogChild?.kill());

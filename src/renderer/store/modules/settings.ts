@@ -4,6 +4,7 @@ import { ref, watch } from 'vue';
 
 import setDataDefault from '@/../main/set.json';
 import homeRouter from '@/router/home';
+import { isNasMode, nasConnected, nasConnectionRevision, nasSourceKeys, nasRequest, nasSyncError, nasSourcesReady, nasDefaultSourceSettings } from '@/services/nasClient';
 import { useMenuStore } from '@/store/modules/menu';
 import { isElectron } from '@/utils';
 import {
@@ -46,7 +47,11 @@ export const useSettingsStore = defineStore('settings', () => {
     if (isElectron) {
       window.electron.ipcRenderer.send('set-store-value', 'set', cloneDeep(mergedData));
     } else {
-      localStorage.setItem('appSettings', JSON.stringify(cloneDeep(mergedData)));
+      // NAS owns source scripts; browser preferences must not become a stale source backup.
+      const preferences = isNasMode ? Object.fromEntries(Object.entries(mergedData)
+        .filter(([key]) => !(nasSourceKeys as readonly string[]).includes(key))) : mergedData;
+      try { localStorage.setItem('appSettings', JSON.stringify(preferences)); }
+      catch { console.warn('浏览器偏好保存失败；当前音源配置仍由 NAS 保存'); }
     }
     setData.value = cloneDeep(mergedData);
   };
@@ -57,6 +62,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const savedSettings = isElectron
       ? window.electron.ipcRenderer.sendSync('get-store-value', 'set')
       : JSON.parse(localStorage.getItem('appSettings') || '{}');
+    if (isNasMode) for (const key of nasSourceKeys) delete savedSettings[key];
 
     // 自定义合并策略：如果是数组，直接使用源数组（覆盖默认值）
     const customizer = (_objValue: any, srcValue: any) => {
@@ -67,7 +73,8 @@ export const useSettingsStore = defineStore('settings', () => {
     };
 
     // 合并默认设置和保存的设置
-    const mergedSettings = mergeWith({}, setDataDefault, savedSettings, customizer);
+    const defaults = isNasMode ? { ...setDataDefault, ...nasDefaultSourceSettings } : setDataDefault;
+    const mergedSettings = mergeWith({}, defaults, savedSettings, customizer);
 
     // 更新设置并返回
     setSetData(mergedSettings);
@@ -76,6 +83,47 @@ export const useSettingsStore = defineStore('settings', () => {
 
   // 初始化 setData
   setData.value = getInitialSettings();
+
+  if (isNasMode) {
+    let ready = false;
+    let revision = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let queue = Promise.resolve();
+    let sourceRequest = 0;
+    watch([nasConnected, nasConnectionRevision], async ([connected]) => {
+      const currentRequest = ++sourceRequest;
+      ready = false;
+      nasSourcesReady.value = false;
+      if (timer) clearTimeout(timer);
+      if (!connected) return;
+      try {
+        const remote = await nasRequest<{ revision: number; settings: Record<string, unknown> }>('sources');
+        if (currentRequest !== sourceRequest) return;
+        revision = remote.revision;
+        setSetData({ ...nasDefaultSourceSettings, ...remote.settings });
+        ready = true;
+        nasSourcesReady.value = true;
+        nasSyncError.value = '';
+      } catch (error: any) { if (currentRequest === sourceRequest) nasSyncError.value = error.message; }
+    }, { immediate: true, flush: 'sync' });
+    watch(() => nasSourceKeys.map(key => setData.value[key]), () => {
+      if (!ready || !nasConnected.value) return;
+      if (timer) clearTimeout(timer);
+      const generation = sourceRequest;
+      timer = setTimeout(() => {
+        if (generation !== sourceRequest) return;
+        const settings = Object.fromEntries(nasSourceKeys.map(key => [key, cloneDeep(setData.value[key])]));
+        queue = queue.then(async () => {
+          if (!ready || !nasConnected.value || generation !== sourceRequest) return;
+          const result = await nasRequest<{ revision: number }>('sources', { revision, settings }, 'PUT');
+          revision = result.revision;
+          nasSyncError.value = '';
+        }).catch((error: any) => { if (generation === sourceRequest) {
+          ready = false; nasSourcesReady.value = false; nasSyncError.value = error.message;
+        } });
+      }, 400);
+    }, { deep: true, flush: 'sync' });
+  }
 
   /**
    * 保存导入的自定义API插件

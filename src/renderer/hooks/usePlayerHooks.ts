@@ -5,6 +5,8 @@ import i18n from '@/../i18n/renderer';
 import { getMusicLrc, getMusicUrl, getParsingMusicUrl } from '@/api/music';
 import { playbackRequestManager } from '@/services/playbackRequestManager';
 import { SongSourceConfigManager } from '@/services/SongSourceConfigManager';
+import { isNasMode, waitNasSources } from '@/services/nasClient';
+import { isCatalogSong, resolveCatalogSong } from '@/services/nasMusicResolver';
 import type { ILyric, ILyricText, IWordData, SongResult } from '@/types/music';
 import { isElectron } from '@/utils';
 import { parseLyrics as parseYrcLyrics } from '@/utils/yrcParser';
@@ -70,6 +72,7 @@ export const getSongUrl = async (
   // 动态导入 settingsStore
   const { useSettingsStore } = await import('@/store/modules/settings');
   const settingsStore = useSettingsStore();
+  if (isNasMode) await waitNasSources();
 
   try {
     // 在开始处理前验证请求
@@ -77,6 +80,8 @@ export const getSongUrl = async (
       console.log(`[getSongUrl] 请求已失效: ${requestId}`);
       throw new Error('Request cancelled');
     }
+
+    if (isNasMode && isCatalogSong(songData)) return await resolveCatalogSong(songData);
 
     if (songData.playMusicUrl) {
       if (isDownloaded) return songData.playMusicUrl;
@@ -198,6 +203,7 @@ export const getSongUrl = async (
     const parsedUrl = res?.data?.data?.url || null;
     return await resolveCachedPlaybackUrl(parsedUrl, songData);
   } catch (error) {
+    if (isNasMode && isCatalogSong(songData)) throw error;
     if ((error as Error).message === 'Request cancelled') {
       throw error;
     }
@@ -265,7 +271,8 @@ const parseLyrics = (lyricsString: string): { lyrics: ILyricText[]; times: numbe
  */
 export const loadLrc = async (id: string | number): Promise<ILyric> => {
   try {
-    const numericId = typeof id === 'string' ? parseInt(id, 10) : id;
+    const numericId = isNasMode && /^(qq|kugou|kuwo|migu):/.test(String(id)) ? id :
+      typeof id === 'string' ? parseInt(id, 10) : id;
     let lyricData: any;
 
     if (isElectron) {

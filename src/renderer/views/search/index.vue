@@ -4,6 +4,7 @@
   >
     <n-scrollbar class="h-full">
       <div class="search-content w-full pb-32 pt-6 page-padding">
+        <catalog-search-panel v-if="isNasMode" :show-input="false" />
         <!-- Search Header / Hero -->
         <div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
@@ -93,6 +94,8 @@ import { getHotSearch } from '@/api/home';
 import { useSearchStore } from '@/store/modules/search';
 import type { IHotSearch } from '@/types/search';
 import { calculateAnimationDelay } from '@/utils';
+import { isNasMode } from '@/services/nasClient';
+import CatalogSearchPanel from '@/components/common/CatalogSearchPanel.vue';
 
 defineOptions({
   name: 'Search'
@@ -155,7 +158,8 @@ const handleSearch = (keyword: string, type?: number) => {
     path: '/search-result',
     query: {
       keyword,
-      type: searchType
+      type: searchType,
+      ...(isNasMode ? { platform: searchStore.searchPlatform } : {})
     }
   });
 };

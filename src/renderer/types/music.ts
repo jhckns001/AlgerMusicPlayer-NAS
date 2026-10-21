@@ -67,7 +67,10 @@ export interface SongResult {
   lyric?: ILyric;
   backgroundColor?: string;
   primaryColor?: string;
-  source?: 'netease';
+  source?: 'netease' | 'qq' | 'kugou' | 'kuwo' | 'migu';
+  platformId?: string;
+  platformName?: string;
+  lxMusicInfo?: import('./lxMusic').LxMusicInfo;
   // 过期时间
   expiredAt?: number;
   // 获取时间

@@ -20,6 +20,14 @@
             </div>
 
             <!-- Search Type Tabs -->
+            <div v-if="isNasMode" class="platform-tabs flex flex-wrap gap-2" aria-label="音乐平台">
+              <button v-for="platform in searchPlatforms" :key="platform.key"
+                class="px-4 py-2.5 rounded-full text-sm font-medium transition-colors"
+                :class="searchPlatform === platform.key ? 'bg-primary text-white' : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-500'"
+                :aria-pressed="searchPlatform === platform.key" @click="handlePlatformChange(platform.key)">
+                {{ platform.label }}
+              </button>
+            </div>
             <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2">
               <button
                 v-for="type in searchTypeOptions"
@@ -31,6 +39,7 @@
                     : 'bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800'
                 "
                 @click="handleTypeChange(type.key)"
+                :aria-pressed="searchType === type.key"
               >
                 {{ type.label }}
               </button>
@@ -112,6 +121,10 @@
 
         <!-- Results Section -->
         <section class="results-section page-padding-x mt-6">
+          <div v-if="searchError" class="mb-6 rounded-2xl bg-neutral-100 dark:bg-neutral-900 p-5" role="alert">
+            <p>{{ searchError }}</p>
+            <button class="mt-3 text-primary font-semibold" @click="loadSearch(Boolean(searchDetail))">重试</button>
+          </div>
           <n-spin :show="searchDetailLoading">
             <div
               v-if="searchDetailLoading && !isLoadingMore"
@@ -139,6 +152,7 @@
                     :selectable="isSelecting"
                     :selected="selectedSongs.includes(item.id)"
                     :is-next="true"
+                    :favorite="searchPlatform === 'netease'"
                     @play="handlePlay"
                     @select="(id, selected) => handleSelect(id, selected)"
                   />
@@ -202,7 +216,7 @@
 
               <!-- Empty State -->
               <div
-                v-if="!searchDetailLoading && isResultEmpty"
+                v-if="!searchDetailLoading && !searchError && isResultEmpty"
                 class="flex flex-col items-center justify-center py-20 text-neutral-400"
               >
                 <i class="ri-search-line text-6xl mb-4 opacity-20"></i>
@@ -211,6 +225,7 @@
 
               <!-- Loading More / Footer -->
               <div class="mt-12 py-8 border-t border-neutral-100 dark:border-neutral-800">
+                <button v-if="hasMore && !isLoadingMore && !searchError" class="block mx-auto px-5 py-3 text-primary" @click="loadSearch(true)">加载更多</button>
                 <div v-if="isLoadingMore" class="flex flex-col items-center gap-4">
                   <n-spin size="small" />
                   <span class="text-xs text-neutral-400 font-medium tracking-widest uppercase">
@@ -236,7 +251,7 @@
 
 <script lang="ts" setup>
 import { useDateFormat } from '@vueuse/core';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -251,6 +266,8 @@ import { usePlayerStore } from '@/store/modules/player';
 import { useSearchStore } from '@/store/modules/search';
 import type { SongResult } from '@/types/music';
 import { calculateAnimationDelay, isElectron, isMobile } from '@/utils';
+import { isNasMode } from '@/services/nasClient';
+import { searchPlatforms, catalogCategories } from '@/services/musicCatalog';
 
 defineOptions({
   name: 'SearchResult'
@@ -278,6 +295,10 @@ const formatSong = (item: any) => {
 const searchDetail = ref<any>();
 const searchType = computed(() => searchStore.searchType as number);
 const searchDetailLoading = ref(false);
+const searchError = ref('');
+const searchPlatform = computed(() => isNasMode ? searchStore.searchPlatform : 'netease');
+let controller: AbortController | undefined;
+let generation = 0;
 
 const ITEMS_PER_PAGE = 30;
 const page = ref(0);
@@ -289,6 +310,7 @@ const titleElRef = ref<HTMLElement | null>(null);
 useScrollTitle(currentKeyword, titleElRef);
 
 const searchTypeOptions = computed(() => {
+  if (isNasMode) return catalogCategories;
   return SEARCH_TYPES.map((type) => ({
     label: t(type.label),
     key: type.key
@@ -362,32 +384,43 @@ const loadSearch = async (isLoadMore = false) => {
   if (!keywords) return;
 
   const type = searchType.value;
+  const platform = searchPlatform.value;
 
   if (!isLoadMore) {
+    controller?.abort();
+    generation++;
+    isLoadingMore.value = false;
     searchDetail.value = undefined;
     page.value = 0;
     hasMore.value = true;
     searchDetailLoading.value = true;
   } else {
-    if (isLoadingMore.value || !hasMore.value) return;
+    if (searchDetailLoading.value || isLoadingMore.value || !hasMore.value) return;
     isLoadingMore.value = true;
   }
+  const current = generation;
+  controller = new AbortController();
+  searchError.value = '';
 
   try {
     const { data } = await getSearch({
       keywords,
       type,
+      platform,
       limit: ITEMS_PER_PAGE,
-      offset: page.value * ITEMS_PER_PAGE
-    });
+      offset: page.value
+    }, controller.signal);
 
     // 竞态守卫：请求返回时若关键词/类型已切换，丢弃这次过期结果
-    if (keywords !== currentKeyword.value || type !== searchType.value) {
+    if (current !== generation || keywords !== currentKeyword.value || type !== searchType.value || platform !== searchPlatform.value) {
       return;
     }
 
+    if (!data.result || (data.code && data.code !== 200)) throw new Error('搜索接口未返回有效结果，请稍后重试');
     const songs = data.result.songs || [];
     const albums = data.result.albums || [];
+    const artists = (data.result.artists || []).map((item: any) => ({ ...item,
+      picUrl: item.picUrl || item.img1v1Url, type: 'artist', desc: item.desc || '歌手' }));
     const mvs = (data.result.mvs || []).map((item: any) => ({
       ...item,
       picUrl: item.cover,
@@ -400,7 +433,7 @@ const loadSearch = async (isLoadMore = false) => {
       ...item,
       picUrl: item.coverImgUrl,
       playCount: item.playCount,
-      desc: item.creator.nickname,
+      desc: item.desc || item.creator?.nickname || '',
       type: 'playlist'
     }));
 
@@ -412,12 +445,12 @@ const loadSearch = async (isLoadMore = false) => {
     }));
 
     songs.forEach((item: any) => {
-      item.picUrl = item.al.picUrl;
-      item.artists = item.ar;
+      item.picUrl = item.al?.picUrl || item.picUrl;
+      item.artists = item.ar || item.artists;
     });
     albums.forEach((item: any) => {
       item.type = '专辑';
-      item.desc = `${item.artist.name} ${item.company} ${dateFormat(item.publishTime)}`;
+      item.desc = item.desc || [item.artist?.name, item.company, item.publishTime ? dateFormat(item.publishTime) : ''].filter(Boolean).join(' ');
     });
 
     if (isLoadMore && searchDetail.value) {
@@ -426,36 +459,41 @@ const loadSearch = async (isLoadMore = false) => {
       searchDetail.value.mvs = [...(searchDetail.value.mvs || []), ...mvs];
       searchDetail.value.playlists = [...(searchDetail.value.playlists || []), ...playlists];
       searchDetail.value.djRadios = [...(searchDetail.value.djRadios || []), ...djRadios];
+      searchDetail.value.artists = [...(searchDetail.value.artists || []), ...artists];
+      for (const key of Object.keys(searchDetail.value)) {
+        searchDetail.value[key] = [...new Map(searchDetail.value[key].map((item: any) => [item.id, item])).values()];
+      }
     } else {
-      searchDetail.value = { songs, albums, mvs, playlists, djRadios };
+      searchDetail.value = { songs, albums, mvs, playlists, djRadios, artists };
     }
 
-    hasMore.value =
+    hasMore.value = typeof data.result.hasMore === 'boolean' ? data.result.hasMore :
       songs.length === ITEMS_PER_PAGE ||
       albums.length === ITEMS_PER_PAGE ||
       mvs.length === ITEMS_PER_PAGE ||
       playlists.length === ITEMS_PER_PAGE ||
-      djRadios.length === ITEMS_PER_PAGE;
+      djRadios.length === ITEMS_PER_PAGE || artists.length === ITEMS_PER_PAGE;
 
-    page.value++;
+    const next = Number(data.result.nextOffset);
+    page.value = Number.isFinite(next) && next > page.value ? next : page.value + ITEMS_PER_PAGE;
   } catch (error) {
-    console.error(t('search.error.searchFailed'), error);
+    if (current === generation && !controller?.signal.aborted) searchError.value = error instanceof Error ? error.message : '搜索失败，请重试';
   } finally {
-    searchDetailLoading.value = false;
-    isLoadingMore.value = false;
+    if (current === generation) { searchDetailLoading.value = false; isLoadingMore.value = false; }
   }
 };
 
 const handleTypeChange = (type: number) => {
-  searchStore.searchType = type;
   router.replace({
-    path: '/search-result',
+    path: route.path,
     query: {
       ...route.query,
       type
     }
   });
 };
+const handlePlatformChange = (platform: string) => router.replace({ path: route.path,
+  query: { ...route.query, platform, type: searchType.value } });
 
 const handleScroll = (e: any) => {
   const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -479,26 +517,19 @@ const handlePlayAll = () => {
   }
 };
 
-onMounted(() => {
-  if (route.query.type) {
-    searchStore.searchType = Number(route.query.type);
-  }
-  if (currentKeyword.value) {
-    loadSearch();
-  }
-});
-
 watch(
-  () => [route.query.keyword, route.query.type],
+  () => [route.query.keyword, route.query.type, route.query.platform],
   () => {
-    if (route.name === 'searchResult') {
-      if (route.query.type) {
-        searchStore.searchType = Number(route.query.type);
-      }
+    if (route.name === 'searchResult' || route.name === 'mobileSearchResult') {
+      const type = Number(route.query.type || searchStore.searchType);
+      searchStore.searchType = isNasMode && !catalogCategories.some(c => c.key === type) ? 1 : type;
+      const platform = String(route.query.platform || searchStore.searchPlatform);
+      searchStore.searchPlatform = searchPlatforms.some(p => p.key === platform) ? platform : 'netease';
       loadSearch();
     }
-  }
+  }, { immediate: true }
 );
+onBeforeUnmount(() => { generation++; controller?.abort(); });
 </script>
 
 <style lang="scss" scoped>

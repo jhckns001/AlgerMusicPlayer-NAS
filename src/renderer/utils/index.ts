@@ -1,6 +1,7 @@
 import { computed } from 'vue';
 
 import { useSettingsStore } from '@/store/modules/settings';
+import { isNasMode } from '@/services/nasClient';
 
 // 设置歌手背景图片
 export const setBackgroundImg = (url: String) => {
@@ -81,6 +82,9 @@ export const getImgUrl = (url: string | undefined, size: string = '') => {
 
   // base64 Data URL 和本地文件路径不需要添加尺寸参数
   if (url.startsWith('data:') || url.startsWith('local://')) return url;
+  if (isNasMode && /^https?:\/\/(?:y\.gtimg\.cn|qpic\.y\.qq\.com)\//i.test(url))
+    return `/nas/cover?url=${encodeURIComponent(url)}`;
+  if (!/^https?:\/\/[^/]*music\.126\.net\//i.test(url)) return url;
 
   if (url.includes('thumbnail')) {
     // 只替换最后一个 thumbnail 参数的尺寸

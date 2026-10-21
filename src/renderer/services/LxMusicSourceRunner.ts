@@ -8,6 +8,8 @@
  * 4. 处理初始化和音乐解析请求
  */
 
+import { isNasMode, nasHttpRequest } from './nasClient';
+
 import type {
   LxInitedData,
   LxLyricResult,
@@ -387,12 +389,23 @@ export class LxMusicSourceRunner {
     options: any,
     callback: (err: Error | null, resp: any, body: any) => void
   ): () => void {
-    console.log(`[LxMusicRunner] HTTP 请求: ${options.method || 'GET'} ${url}`);
+    if (!isNasMode) console.log(`[LxMusicRunner] HTTP 请求: ${options.method || 'GET'} ${url}`);
 
     const timeout = options.timeout || 30000;
     const requestId = `lx_http_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     const hasMainProcessHttp = typeof window.api?.lxMusicHttpRequest === 'function';
+
+    if (isNasMode) {
+      let cancelled = false;
+      const controller = new AbortController();
+      nasHttpRequest(url, options, controller.signal).then((response) => {
+        if (!cancelled) callback(null, response, response.body);
+      }).catch((error: Error) => {
+        if (!cancelled) callback(error, null, null);
+      });
+      return () => { cancelled = true; controller.abort(); };
+    }
 
     if (hasMainProcessHttp) {
       window.api

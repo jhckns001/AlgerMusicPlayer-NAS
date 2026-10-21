@@ -22,8 +22,8 @@
     <!-- 图片插槽 -->
     <template #image>
       <n-image
-        v-if="item.picUrl"
-        :src="getImgUrl(item.picUrl, '100y100')"
+        :src="getImgUrl(item.picUrl, '100y100') || '/music-placeholder.svg'"
+        fallback-src="/music-placeholder.svg"
         class="song-item-img"
         preview-disabled
         :img-props="{

@@ -1,0 +1,2 @@
+VITE_NAS_MODE=true
+VITE_API=/api

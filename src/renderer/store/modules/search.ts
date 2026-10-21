@@ -4,6 +4,7 @@ import { ref } from 'vue';
 export const useSearchStore = defineStore('search', () => {
   const searchValue = ref('');
   const searchType = ref(1);
+  const searchPlatform = ref('netease');
 
   const setSearchValue = (value: string) => {
     searchValue.value = value;
@@ -16,6 +17,7 @@ export const useSearchStore = defineStore('search', () => {
   return {
     searchValue,
     searchType,
+    searchPlatform,
     setSearchValue,
     setSearchType
   };

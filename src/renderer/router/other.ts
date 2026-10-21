@@ -1,4 +1,10 @@
+import { isNasMode } from '@/services/nasClient';
 const otherRouter = [
+  {
+    path: '/catalog/:platform/:kind/:id', name: 'catalogDetail',
+    meta: { title: '音乐详情', keepAlive: false, showInMenu: false, back: true },
+    component: () => import('@/views/search/CatalogDetail.vue')
+  },
   {
     path: '/user/follows',
     name: 'userFollows',
@@ -119,7 +125,7 @@ const otherRouter = [
       showInMenu: false,
       back: true
     },
-    component: () => import('@/views/mobile-search-result/index.vue')
+    component: () => isNasMode ? import('@/views/search/SearchResult.vue') : import('@/views/mobile-search-result/index.vue')
   },
   {
     path: '/podcast/radio/:id',

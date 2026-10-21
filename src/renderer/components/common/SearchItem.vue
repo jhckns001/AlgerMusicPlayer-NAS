@@ -70,10 +70,12 @@ import { usePlayerStore } from '@/store/modules/player';
 import { usePlayHistoryStore } from '@/store/modules/playHistory';
 import { IMvItem } from '@/types/mv';
 import { getImgUrl } from '@/utils';
+import { catalogLocation } from '@/services/musicCatalog';
+import { isNasMode } from '@/services/nasClient';
 
 const props = defineProps<{
   item: {
-    id: number;
+    id: string | number;
     picUrl: string;
     name: string;
     desc: string;
@@ -98,6 +100,9 @@ const getCurrentMv = () => {
 };
 
 const handleClick = async () => {
+  const foreign = isNasMode && catalogLocation(props.item.id, props.item.catalogKind || props.item.type);
+  if (foreign) { await router.push(foreign); return; }
+  if (props.item.type === 'artist') { await router.push(`/artist/detail/${props.item.id}`); return; }
   if (props.item.type === '专辑') {
     navigateToMusicList(router, {
       id: props.item.id,
@@ -121,7 +126,7 @@ const handleClick = async () => {
     handleShowMv();
   } else if (props.item.type === 'djRadio') {
     playHistoryStore.addPodcastRadio({
-      id: props.item.id,
+      id: Number(props.item.id),
       name: props.item.name,
       picUrl: props.item.picUrl,
       dj: props.item.dj,

@@ -60,6 +60,9 @@ export type MinifiedSong = {
   // 用 NonNullable + ? 显式表达「可选且缺失即不存在」，下游 optional chain 访问更安全
   al?: NonNullable<SongResult['al']>;
   source?: SongResult['source'];
+  platformId?: SongResult['platformId'];
+  platformName?: SongResult['platformName'];
+  lxMusicInfo?: SongResult['lxMusicInfo'];
   dt?: SongResult['dt'];
   playMusicUrl?: SongResult['playMusicUrl'];
   isPodcast?: SongResult['isPodcast'];
@@ -128,6 +131,9 @@ export const minifySong = (s: SongResult): MinifiedSong => {
         }
       : undefined) as MinifiedSong['al'],
     source: s.source,
+    platformId: s.platformId,
+    platformName: s.platformName,
+    lxMusicInfo: s.lxMusicInfo,
     dt: s.dt,
     playMusicUrl: s.playMusicUrl?.startsWith('local://') ? s.playMusicUrl : undefined,
     // 必须保留 isPodcast/program：playbackController.playTrack 用 music.isPodcast 决定写

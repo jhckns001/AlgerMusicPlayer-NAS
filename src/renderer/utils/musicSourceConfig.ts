@@ -1,6 +1,8 @@
 import { computed } from 'vue';
 
 import { useSettingsStore } from '@/store';
+import { isNasMode } from '@/services/nasClient';
+import { lxCandidates } from '@/services/lxFailover';
 import type { Platform } from '@/types/music';
 
 // ==================== 类型定义 ====================
@@ -40,14 +42,15 @@ export const useMusicSources = () => {
   const settingsStore = useSettingsStore();
 
   const allSources = computed<MusicSourceInfo[]>(() => {
-    return MUSIC_SOURCE_REGISTRY.map((source) => {
+    return MUSIC_SOURCE_REGISTRY.filter(source => !isNasMode || source.key === 'lxMusic').map((source) => {
       let available = true;
       let configHint: string | undefined;
 
       if (source.key === 'lxMusic') {
         available =
-          (settingsStore.setData.lxMusicScripts?.length ?? 0) > 0 &&
-          Boolean(settingsStore.setData.activeLxMusicApiId);
+          isNasMode ? lxCandidates(settingsStore.setData).length > 0 :
+            (settingsStore.setData.lxMusicScripts?.length ?? 0) > 0 &&
+            Boolean(settingsStore.setData.activeLxMusicApiId);
         if (!available) configHint = 'settings.playback.lxMusic.scripts.notConfigured';
       } else if (source.key === 'custom') {
         available = Boolean(settingsStore.setData.customApiPlugin);

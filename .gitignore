@@ -1,4 +1,8 @@
 node_modules
+nas-data/
+nas-fixture-data/
+nas/.env
+nas/*.key
 .DS_Store
 
 dist
@@ -11,6 +15,8 @@ dist_electron
 yarn.lock
 pnpm-lock.yaml
 package-lock.json
+!package-lock.json
+!nas/runtime/package-lock.json
 dist.zip
 
 .vscode
@@ -54,4 +60,23 @@ src/renderer/components.d.ts
 
 # 内部整理记录，不进公开仓库
 docs/private/
+nas-failover-fixture-data/
+nas-soda-data/
+
+# NAS 实例、私有配置及本地交付记录
+data/
+私有配置/
+验证记录/
+备份/
+交付包/
+已取消/
+nas/bin/
+.env
+.env.*
+!.env.nas
+!.env.example
+*.log
+*.key
+*.keystore
+*.jks
 docs/private/

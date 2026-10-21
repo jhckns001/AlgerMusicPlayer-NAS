@@ -9,6 +9,7 @@ import i18n from '@/../i18n/renderer';
 import router from '@/router';
 import pinia from '@/store';
 import { isElectron } from '@/utils';
+import { refreshNasConnection } from '@/services/nasClient';
 
 import App from './App.vue';
 import directives from './directive';
@@ -32,3 +33,4 @@ app.use(pinia);
 app.use(router);
 app.use(i18n as any);
 app.mount('#app');
+void refreshNasConnection();

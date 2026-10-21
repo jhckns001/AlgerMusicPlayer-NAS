@@ -1,100 +1,129 @@
-<h2 align="center">🎵 Alger Music Player</h2>
-<div align="center">
-<div align="center">
-  <a href="https://github.com/algerkong/AlgerMusicPlayer/stargazers">
-    <img src="https://img.shields.io/github/stars/algerkong/AlgerMusicPlayer?style=for-the-badge&logo=github&label=Stars&logoColor=white&color=22c55e" alt="GitHub stars">
-  </a>
-  <a href="https://github.com/algerkong/AlgerMusicPlayer/releases">
-    <img src="https://img.shields.io/github/v/release/algerkong/AlgerMusicPlayer?style=for-the-badge&logo=github&label=Release&logoColor=white&color=1a67af" alt="GitHub release">
-  </a>
-  <a href="https://pd.qq.com/s/cs056n33q?b=5">
-    <img src="https://img.shields.io/badge/QQ频道-algermusic-blue?style=for-the-badge&color=yellow" alt="加入频道">
-  </a>
-  <a href="https://t.me/+9efsKRuvKBk2NWVl">
-    <img src="https://img.shields.io/badge/AlgerMusic-blue?style=for-the-badge&logo=telegram&logoColor=white&label=Telegram" alt="Telegram">
-  </a>
-   <a href="https://donate.alger.fun/">
-    <img src="https://img.shields.io/badge/%E9%A1%B9%E7%9B%AE%E6%8D%90%E8%B5%A0-blue?style=for-the-badge&logo=telegram&logoColor=pink&color=pink&label=%E8%B5%9E%E5%8A%A9" alt="赞助">
-  </a>
-</div>
-</div>
-<div align="center">
-  <a href="https://hellogithub.com/repository/607b849c598d48e08fe38789d156ebdc" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=607b849c598d48e08fe38789d156ebdc&claim_uid=ObuMXUfeHBmk9TI&theme=neutral" alt="Featured｜HelloGitHub" width="160" height="32" /></a>
-</div>
+# Alger Music NAS
 
-[项目下安装以及常用问题文档](https://www.yuque.com/alger-pfg5q/ip4f1a/bmgmfmghnhgwghkm?singleDoc#)
+基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 制作的**非官方 NAS 网页适配版**。保留原版播放器体验，增加 NAS 直接导入 LX 音源、多脚本切换和多平台搜索。
 
-主要功能如下
+当前 NAS 版本：**0.3.3**。上游基线：**5.1.0**，提交 [`b15617ce`](https://github.com/algerkong/AlgerMusicPlayer/commit/b15617ce8652e12a4314be66e2c35ff1f7602a10)。这表示本项目采用的代码基线，不表示始终同步上游最新提交。
 
-- 🎵 音乐推荐
-- 🔐 账号登录与同步
-- 📝 功能
-  - 播放历史记录
-  - 歌曲收藏管理
-  - 歌单 MV 排行榜 每日推荐
-  - 自定义快捷键配置（全局或应用内）
-- 🎨 界面与交互
-  - 沉浸式歌词显示（点击左下角封面进入）
-  - 独立桌面歌词窗口
-  - 明暗主题切换
-  - 迷你模式
-  - 状态栏控制
-  - 多语言支持
-- 🎼 音乐功能
-  - 支持歌单、MV、专辑等完整音乐服务
-  - 音乐资源解析（基于 @unblockneteasemusic/server）
-  - EQ均衡器
-  - 定时播放 远程控制播放 倍速播放
-  - 高品质音乐
-  - 音乐文件下载
-  - 搜索 MV 音乐 专辑 歌单 bilibili
-  - 音乐单独选择音源解析
-- 🚀 技术特性
-  - 本地化服务，无需依赖在线API (基于 netease-cloud-music-api)
-  - 全平台适配（Desktop & Web & Mobile Web & Android<测试> & ios<后续>）
+本仓库不附带真实音源脚本、音源下载链接、账号或个人配置。音源由使用者自行导入。
 
-## 项目简介
+## 原作者与来源
 
-一个第三方音乐播放器、本地服务、桌面歌词、音乐下载、最高音质
+- 原作者主页：**[Alger / algerkong](https://github.com/algerkong)**。
+- 原项目：**[algerkong/AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer)**。
+- 原版说明存档：[UPSTREAM_README.md](docs/UPSTREAM_README.md)。其中的桌面安装、发布和赞助链接属于原项目。
+- 原始 MIT 许可证及版权声明保留在 [LICENSE](LICENSE)。完整来源和第三方组件说明见 [NOTICE.md](NOTICE.md)。
 
-## 预览地址
+播放器主要界面、网易云功能、歌词、主题、播放队列，以及桌面版 LX 协议与执行器等来自上游。本仓库的 NAS 适配由维护者借助 OpenAI Codex 协作完成，不代表原作者发布或维护此版本。
 
-[http://music.alger.fun/](http://music.alger.fun/)
+## 增加和修改了什么
 
-## 软件截图
+| 范围 | 本版改动 |
+| --- | --- |
+| NAS 部署 | 网页、NAS 后端、网易云 API 和搜索组件放在同一个容器中运行，无需电脑常驻，也无需旧桥接服务或柠檬服务。 |
+| LX 音源 | 将原版桌面脚本能力适配到网页，支持本地文件和 URL 导入；脚本及选择保存在 NAS 数据目录，多设备读取。 |
+| 自动切换 | 可选择参与自动切换的脚本并调整优先级。新配置默认优先 FLAC，再按策略降低到 320k、128k；保留已有用户的音质选择。 |
+| 搜索 | 增加 QQ、酷狗入口，与网易云一起提供歌曲、专辑、歌单、歌手四类搜索及相应歌曲列表。各平台 ID 和解析字段分别保存。 |
+| 播放适配 | 增加解析超时、音频探测及同源播放地址，支持 Range 请求，避免把接口错误页当成音频。 |
+| 界面 | 手机首页的每日推荐、私人 FM 改为等宽正方形；移除搜索页重复输入框；QQ 封面改为同源加载并提供占位图。 |
+| 修复 | 修复所用 API 的扫码登录提示图、侧边栏点击范围、部分旧页面资源加载和设置草稿覆盖音源列表的问题。 |
 
-![首页白](./docs/image.png)
-![首页黑](./docs/image3.png)
-![歌词](./docs/image6.png)
-![桌面歌词](./docs/image2.png)
-![设置页面](./docs/image4.png)
-![音乐远程控制](./docs/image5.png)
+逐版的新增、修复和未解决事项见 **[NAS 改版记录](CHANGELOG_NAS.md)**。
 
-## 项目启动
+## Docker 安装
 
-```bash
-npm install
-npm run dev
+支持带 Docker Compose 的 **Linux x86_64 NAS**。当前固定的搜索运行组件不包含 ARM 版本；ARM NAS 尚未适配。首次构建需要访问 npm、Docker 镜像仓库和 GitHub Releases。
+
+```sh
+git clone https://github.com/jhckns001/alger-music-nas.git
+cd alger-music-nas
+docker compose up -d --build
 ```
 
-## 开发文档
+浏览器打开 `http://你的NAS地址:18080/`。容器名为 `alger-music`，容器内端口为 `8080`。如果已有同名容器或端口占用，应先调整本项目配置；以上命令适用于新安装。
 
-点击这里[开发文档](./DEV.md)
+仓库目前提供源码构建方式，没有发布可直接拉取的公共成品镜像。
 
-## 赞赏☕️
+### 配置端口和访问范围
 
-[赞赏列表](http://donate.alger.fun/)
-| 微信赞赏 | 支付宝赞赏 |
-| :--------------------------------------------------------------------------------: | :--------------------------------------------------------------------------------: |
-| <img src="https://github.com/algerkong/algerkong/blob/main/wechat.jpg?raw=true" alt="WeChat QRcode" width=200> <br><small>喝点咖啡继续干</small> | <img src="https://github.com/algerkong/algerkong/blob/main/alipay.jpg?raw=true" alt="Wechat QRcode" width=200> <br><small>来包辣条吧~</small> |
+将 `.env.example` 复制为 `.env`，按需修改后重新启动：
 
-## 项目统计
+```dotenv
+ALGER_PORT=18080
+NAS_BIND_IP=0.0.0.0
+TZ=Asia/Shanghai
+NAS_REQUIRE_AUTH=0
+NAS_ACCESS_KEY=
+```
 
-[![Star History Chart](https://api.star-history.com/chart?repos=algerkong%2FAlgerMusicPlayer&type=date&legend=top-left)](https://www.star-history.com/?repos=algerkong%2FAlgerMusicPlayer&type=date&legend=top-left)
+`NAS_BIND_IP` 控制监听地址。默认无需为音源设置访问密钥；若需要限制 NAS 接口访问，设置 `NAS_REQUIRE_AUTH=1` 和自己的 `NAS_ACCESS_KEY`。详细行为见 [NAS 部署说明](NAS说明.md)。
 
-## 欢迎提Issues
+### 导入音源
 
-## 声明
+打开设置中的音源配置，进入“洛雪音源”，导入自己的脚本，再启用需要的脚本、设置音源优先级及音质。脚本须支持对应平台和请求音质；能搜到歌曲不代表已导入脚本一定能解析该歌曲。
 
-本软件仅用于学习交流，禁止用于商业用途，否则后果自负。
-希望大家还是要多多支持官方正版，此软件仅用作开发教学。
+网页请求由 NAS 转发。某些只适用于桌面特有接口的脚本可能仍需适配，不承诺兼容所有 LX 脚本。
+
+### 更新与备份
+
+```sh
+git pull --ff-only
+docker compose up -d --build
+```
+
+配置保存在 Docker 命名卷的 `/data`，更新时保留该卷。备份服务器端音源与配置：
+
+```sh
+docker cp alger-music:/data ./alger-data-backup
+```
+
+网易云登录、播放历史及部分界面偏好保存在浏览器中，不全在这个备份里。不要在需要保留配置时执行 `docker compose down -v`。
+
+## 本地开发
+
+使用 Node.js 24。安装依赖时跳过桌面 Electron 下载：
+
+```sh
+npm ci --ignore-scripts
+npm run build:nas
+```
+
+下载并核验搜索组件：
+
+```sh
+# NAS / Linux x86_64 构建所用文件
+node nas/download-catalog.mjs
+
+# Windows x64 本地预览所用文件
+node nas/download-catalog.mjs --platform windows
+```
+
+Windows PowerShell 本地启动示例：
+
+```powershell
+$env:CATALOG_BIN = "$PWD/nas/bin/tuneweave.exe"
+$env:DATA_DIR = "$PWD/nas-data"
+$env:PORT = "18087"
+npm run start:nas
+```
+
+浏览器打开 `http://127.0.0.1:18087/`。Linux 本地预览相应设置 `CATALOG_BIN` 指向 `nas/bin/tuneweave`；建议通过本项目 Dockerfile 提供兼容的 Linux 运行环境。
+
+若 NAS 无法从 GitHub 下载组件，可以先在能联网的电脑执行默认下载命令，再把包含 `nas/bin/tuneweave` 的源码目录上传 NAS 构建。构建会复用通过固定 SHA256 验证的文件。该二进制不提交到源码仓库。
+
+已有检查入口：
+
+```sh
+npm run typecheck:web
+npm run test:nas
+```
+
+## 已知限制
+
+- QQ 搜索曾间歇失败，具体上游原因尚未确定。接口提供有限重试和只读诊断 `/nas/catalog/diagnostics`，不能把一次更换端口后恢复当作已确认的缓存或端口问题。
+- 更改地址或端口会改变浏览器站点身份，浏览器内的登录和偏好不会自动迁移。服务器端脚本是否保留取决于是否仍挂载原来的数据卷。
+- 音源可用性、曲目匹配和实际音质取决于用户导入的脚本及上游服务；“优先 FLAC”是请求策略，不保证每首歌都有无损资源。
+- 此分支的交付目标是 NAS 网页版。保留的上游桌面源码不表示本仓库另行验证或发布了桌面安装包。
+
+## 许可证
+
+延续上游 [MIT License](LICENSE)。原作者和贡献者的版权声明保留。TuneWeave 等组件遵循各自许可证，见 [NOTICE.md](NOTICE.md) 与 `nas/licenses/`。

@@ -2,6 +2,8 @@ import { cloneDeep } from 'lodash';
 
 import { musicDB } from '@/hooks/MusicHook';
 import { SongSourceConfigManager } from '@/services/SongSourceConfigManager';
+import { lxPlanSignature } from '@/services/lxFailover';
+import { isNasMode, nasInstanceId, refreshNasConnection, waitNasSources } from '@/services/nasClient';
 import { useSettingsStore } from '@/store';
 import type { SongResult } from '@/types/music';
 import { isElectron } from '@/utils';
@@ -448,6 +450,7 @@ class MusicSourceStrategyFactory {
    */
   static getAvailableStrategies(sources: string[], settingsStore?: any): MusicSourceStrategy[] {
     return this.strategies
+      .filter((strategy) => !isNasMode || strategy.name === 'lxMusic')
       .filter((strategy) => strategy.canHandle(sources, settingsStore))
       .sort((a, b) => a.priority - b.priority);
   }
@@ -510,11 +513,16 @@ export class MusicParser {
    * @returns 解析结果
    */
   static async parseMusic(id: number, data: SongResult): Promise<MusicParseResult> {
+    if (isNasMode && data.source && data.source !== 'netease') {
+      const { resolveCatalogSong } = await import('@/services/nasMusicResolver');
+      const url = await resolveCatalogSong(data);
+      return { data: { code: 200, message: 'success', data: { url, source: data.source } } };
+    }
     const startTime = performance.now();
 
     try {
       // 非Electron环境不支持本地解析
-      if (!isElectron) {
+      if (!isElectron && !isNasMode) {
         console.log('非Electron环境，不支持音乐解析');
         return buildFailedResult('当前环境不支持音乐解析');
       }
@@ -529,11 +537,15 @@ export class MusicParser {
       }
 
       // 获取音源配置
+      if (isNasMode) { await refreshNasConnection(); await waitNasSources(); }
       const { musicSources, quality } = getMusicConfig(id, settingsStore);
+      const cacheSources = isNasMode ? [...musicSources,
+        `lxPlan:${lxPlanSignature(settingsStore.setData)}`, `quality:${quality}`,
+        `instance:${nasInstanceId.value}`] : musicSources;
 
       // 检查缓存（传入音源配置用于验证缓存有效性）
       console.log(`检查歌曲 ${id} 的缓存...`);
-      const cachedResult = await CacheManager.getCachedMusicUrl(id, musicSources);
+      const cachedResult = await CacheManager.getCachedMusicUrl(id, cacheSources);
       if (cachedResult) {
         const endTime = performance.now();
         console.log(`✅ 命中缓存，歌曲 ${id}，耗时: ${(endTime - startTime).toFixed(2)}ms`);
@@ -585,7 +597,7 @@ export class MusicParser {
             );
 
             // 缓存成功结果（包含音源配置）
-            await CacheManager.setCachedMusicUrl(id, result, musicSources);
+            await CacheManager.setCachedMusicUrl(id, result, cacheSources);
 
             return result;
           }

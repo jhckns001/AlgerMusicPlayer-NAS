@@ -1,5 +1,9 @@
 <template>
   <div>
+    <div v-if="isNasMode" class="mb-4 rounded-xl bg-neutral-100 dark:bg-neutral-900 px-4 py-3 text-sm flex flex-wrap gap-3 items-center" role="status">
+      <span>{{ nasSourcesReady ? `已从 NAS 读取 ${setData.lxMusicScripts?.length || 0} 个音源` : nasSyncError || '正在读取 NAS 音源配置…' }}</span>
+      <button class="text-primary font-semibold" :disabled="reloadingSources" @click="reloadSources">{{ reloadingSources ? '读取中…' : '重新读取音源' }}</button>
+    </div>
     <setting-section :title="t('settings.sections.playback')">
       <setting-item
         :title="t('settings.playback.quality')"
@@ -12,7 +16,7 @@
         />
       </setting-item>
 
-      <setting-item v-if="isElectron" :title="t('settings.playback.musicSources')">
+      <setting-item v-if="isElectron || isNasMode" :title="t('settings.playback.musicSources')">
         <template #description>
           <div class="flex items-center gap-2">
             <n-switch v-model:value="setData.enableMusicUnblock">
@@ -31,7 +35,7 @@
             }}</span>
           </div>
         </template>
-        <s-btn :disabled="!setData.enableMusicUnblock" @click="showMusicSourcesModal = true">
+        <s-btn :disabled="!setData.enableMusicUnblock || (isNasMode && !nasSourcesReady)" @click="showMusicSourcesModal = true">
           {{ t('settings.playback.configureMusicSources') }}
         </s-btn>
       </setting-item>
@@ -106,7 +110,7 @@
     </div>
 
     <music-source-settings
-      v-if="isElectron"
+      v-if="isElectron || isNasMode"
       v-model:show="showMusicSourcesModal"
       v-model:sources="musicSources"
     />
@@ -119,6 +123,7 @@ import { useI18n } from 'vue-i18n';
 
 import AudioDeviceSettings from '@/components/settings/AudioDeviceSettings.vue';
 import MusicSourceSettings from '@/components/settings/MusicSourceSettings.vue';
+import { isNasMode, nasSourcesReady, nasSyncError, reloadNasSources } from '@/services/nasClient';
 import { type Platform } from '@/types/music';
 import { isElectron } from '@/utils';
 import { LYRIC_CONFIG_CHANGE_EVENT, readLyricConfig, writeLyricConfig } from '@/utils/lyricConfig';
@@ -142,6 +147,13 @@ const setData = inject(SETTINGS_DATA_KEY)!;
 const platform = window.electron ? window.electron.ipcRenderer.sendSync('get-platform') : 'web';
 
 const showMusicSourcesModal = ref(false);
+const reloadingSources = ref(false);
+const reloadSources = async () => {
+  reloadingSources.value = true;
+  try { await reloadNasSources(); }
+  catch (error) { nasSyncError.value = error instanceof Error ? error.message : '读取音源失败'; }
+  finally { reloadingSources.value = false; }
+};
 
 // 纯净模式开关：与播放页共享 localStorage 配置，通过自定义事件双向实时同步
 const pureModeEnabled = ref(readLyricConfig().pureModeEnabled);

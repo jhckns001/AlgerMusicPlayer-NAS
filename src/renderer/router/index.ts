@@ -5,6 +5,7 @@ import MiniLayout from '@/layout/MiniLayout.vue';
 import homeRouter from '@/router/home';
 import otherRouter from '@/router/other';
 import { useSettingsStore } from '@/store/modules/settings';
+import { isNasMode } from '@/services/nasClient';
 
 import { useUserStore } from '../store/modules/user';
 
@@ -54,6 +55,18 @@ const routes = [
 const router = createRouter({
   routes,
   history: createWebHashHistory()
+});
+
+if (isNasMode) router.onError((error, to) => {
+  if (!/Unable to preload CSS|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(error.message)) return;
+  // Recover a stale open tab once without deleting login or source settings.
+  const previous = Number(sessionStorage.getItem('algerAssetRecoveryAt') || 0);
+  if (Date.now() - previous < 30000) return;
+  sessionStorage.setItem('algerAssetRecoveryAt', String(Date.now()));
+  const url = new URL(window.location.href);
+  url.searchParams.set('app_build', String(Date.now()));
+  url.hash = to.fullPath;
+  window.location.replace(url.href);
 });
 
 // 添加全局前置守卫

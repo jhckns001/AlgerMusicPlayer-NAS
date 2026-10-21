@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { createDiscreteApi } from 'naive-ui';
 
 import { playMusic } from '@/hooks/MusicHook';
 import { usePlayerStore } from '@/store/modules/player';
@@ -19,6 +20,10 @@ export function useFavorite() {
   const toggleFavorite = (e?: Event) => {
     e?.stopPropagation();
     if (!playMusic?.value?.id) return;
+    if (playMusic.value.source && playMusic.value.source !== 'netease') {
+      createDiscreteApi(['message']).message.info('该平台歌曲暂不支持网易云收藏');
+      return;
+    }
 
     const favoriteId = playMusic.value.id;
     if (isFavorite.value) {

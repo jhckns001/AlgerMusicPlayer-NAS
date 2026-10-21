@@ -229,6 +229,8 @@ import { useSearchStore } from '@/store/modules/search';
 import { useSettingsStore } from '@/store/modules/settings';
 import { useUserStore } from '@/store/modules/user';
 import { getImgUrl, isElectron } from '@/utils';
+import { isNasMode } from '@/services/nasClient';
+import { catalogCategories } from '@/services/musicCatalog';
 import { checkUpdate, UpdateResult } from '@/utils/update';
 
 import config from '../../../../package.json';
@@ -352,7 +354,8 @@ const search = () => {
     searchValue.value = hotSearchValue.value;
     return;
   }
-  const q = { keyword: val, type: searchStore.searchType };
+  const q = { keyword: val, type: searchStore.searchType,
+    ...(isNasMode ? { platform: searchStore.searchPlatform } : {}) };
   if (router.currentRoute.value.path === '/search-result') {
     searchStore.searchValue = val;
     router.replace({ path: '/search-result', query: q });
@@ -365,12 +368,14 @@ const search = () => {
 const selectSearchType = (key: number) => {
   searchStore.searchType = key;
   if (searchValue.value)
-    router.push({ path: '/search-result', query: { keyword: searchValue.value, type: key } });
+    router.push({ path: '/search-result', query: { keyword: searchValue.value, type: key,
+      ...(isNasMode ? { platform: searchStore.searchPlatform } : {}) } });
   nextTick(() => inputRef.value?.focus());
 };
 
 const rawSearchTypes = ref(SEARCH_TYPES);
 const searchTypeOptions = computed(() => {
+  if (isNasMode) return catalogCategories;
   locale.value;
   return rawSearchTypes.value
     .filter(() => isElectron)

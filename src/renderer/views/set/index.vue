@@ -73,6 +73,8 @@ import { useI18n } from 'vue-i18n';
 
 import PlayBottom from '@/components/common/PlayBottom.vue';
 import { useSettingsStore } from '@/store/modules/settings';
+import { isNasMode } from '@/services/nasClient';
+import { changedSettings, mergeSettingsDraft } from '@/services/settingsDraft';
 import { isElectron } from '@/utils';
 
 import config from '../../../../package.json';
@@ -105,6 +107,7 @@ const setData = computed({
   }
 });
 
+if (!isNasMode) {
 watch(
   () => localSetData.value,
   (newValue) => saveSettings(newValue),
@@ -124,6 +127,32 @@ watch(
 onUnmounted(() => {
   settingsStore.setSetData(localSetData.value);
 });
+} else {
+  let syncing = false;
+  let previous = mergeSettingsDraft(localSetData.value, {});
+  let pending: Record<string, any> = {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = () => {
+    if (timer) clearTimeout(timer);
+    const changes = pending;
+    pending = {};
+    if (Object.keys(changes).length) settingsStore.setSetData(changes);
+  };
+  watch(() => localSetData.value, value => {
+    if (syncing) return;
+    pending = { ...pending, ...changedSettings(value, previous) };
+    previous = mergeSettingsDraft(value, {});
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(flush, 500);
+  }, { deep: true, flush: 'sync' });
+  watch(() => settingsStore.setData, remote => {
+    syncing = true;
+    localSetData.value = mergeSettingsDraft(remote, pending);
+    previous = mergeSettingsDraft(localSetData.value, {});
+    syncing = false;
+  }, { deep: true, immediate: true, flush: 'sync' });
+  onUnmounted(flush);
+}
 
 // ==================== Provide ====================
 provide(SETTINGS_DATA_KEY, setData);

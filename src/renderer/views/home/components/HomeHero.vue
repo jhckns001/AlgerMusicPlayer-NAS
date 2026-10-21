@@ -57,10 +57,10 @@
             <div class="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/20" />
 
             <!-- Content -->
-            <div class="relative flex h-full flex-col justify-between p-5 md:p-6">
+            <div class="daily-content relative flex h-full flex-col justify-between p-5 md:p-6">
               <!-- Top: Title + Badge -->
               <div>
-                <h3 class="text-2xl font-black leading-tight tracking-wider text-white md:text-3xl">
+                <h3 class="daily-title text-2xl font-black leading-tight tracking-wider text-white md:text-3xl">
                   {{ t('comp.homeHero.dailyRecommend') }}
                 </h3>
                 <span
@@ -71,7 +71,7 @@
                 </span>
               </div>
               <!-- Bottom: Song List + Play -->
-              <div class="flex items-end justify-between gap-4">
+              <div class="daily-footer flex items-end justify-between gap-4">
                 <!-- Song Preview List (bottom-left) -->
                 <div
                   v-if="dayRecommendSongs.length > 0"
@@ -107,7 +107,7 @@
         <!-- ===== 已登录: 私人FM (Right Card) ===== -->
         <div v-if="isLoggedIn" class="hero-card" :style="{ animationDelay: '0.22s' }">
           <div
-            class="fm-card group relative cursor-pointer overflow-hidden rounded-2xl shadow-sm transition-all duration-300 ease-out hover:shadow-xl"
+            class="fm-card fm-player-card group relative cursor-pointer overflow-hidden rounded-2xl shadow-sm transition-all duration-300 ease-out hover:shadow-xl"
             :style="{ background: fmCardBg }"
             @click="handleFmPlay"
           >
@@ -125,7 +125,7 @@
             <div class="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30" />
 
             <!-- Content -->
-            <div class="relative flex h-full items-center gap-4 p-5">
+            <div class="fm-content relative flex h-full items-center gap-4 p-5">
               <!-- Album Cover -->
               <div
                 class="fm-cover relative aspect-square flex-shrink-0 overflow-hidden rounded-xl shadow-lg transition-transform duration-500 group-hover:scale-[1.03]"
@@ -151,7 +151,7 @@
               </div>
 
               <!-- Song Info & Controls -->
-              <div class="flex min-w-0 flex-1 flex-col justify-between self-stretch py-0.5">
+              <div class="fm-details flex min-w-0 flex-1 flex-col justify-between self-stretch py-0.5">
                 <div class="min-w-0">
                   <h3 class="truncate text-base font-bold text-white md:text-lg">
                     {{ fmCurrentSong?.name || t('comp.homeHero.discoverMusic') }}
@@ -160,9 +160,9 @@
                     {{ fmCurrentArtist }}
                   </p>
                 </div>
-                <div class="flex items-center justify-between">
+                <div class="fm-controls-row flex items-center justify-between">
                   <!-- Playback Controls -->
-                  <div class="flex items-center gap-3">
+                  <div class="fm-controls flex items-center gap-3">
                     <button
                       class="flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition-colors hover:text-white"
                       :title="t('comp.homeHero.fmTrash')"
@@ -189,7 +189,7 @@
                   </div>
 
                   <!-- FM Badge -->
-                  <span class="flex items-center gap-1 text-xs font-semibold text-white/50">
+                  <span class="fm-badge flex items-center gap-1 text-xs font-semibold text-white/50">
                     <i class="ri-radio-fill" />
                     {{ t('comp.homeHero.personalFm') }}
                   </span>
@@ -207,7 +207,7 @@
           @click="router.push('/list')"
         >
           <div
-            class="fm-card relative overflow-hidden rounded-2xl bg-neutral-100 shadow-sm transition-all duration-300 ease-out group-hover:shadow-xl dark:bg-neutral-800"
+            class="fm-card playlist-hero-card relative overflow-hidden rounded-2xl bg-neutral-100 shadow-sm transition-all duration-300 ease-out group-hover:shadow-xl dark:bg-neutral-800"
           >
             <!-- 2x2 Cover Grid -->
             <div class="absolute inset-0 grid grid-cols-2 grid-rows-2">
@@ -237,19 +237,19 @@
             <!-- Overlay -->
             <div class="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/40" />
             <!-- Content -->
-            <div class="relative flex h-full flex-col justify-between p-5">
+            <div class="playlist-content relative flex h-full flex-col justify-between p-5">
               <span
                 class="inline-flex w-fit items-center gap-1 rounded-md bg-black/30 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm"
               >
                 <i class="ri-play-list-2-line" />
                 {{ t('comp.homeHero.hotPlaylists') }}
               </span>
-              <div class="flex items-end justify-between gap-4">
+              <div class="playlist-footer flex items-end justify-between gap-4">
                 <div>
                   <h3 class="text-lg font-bold text-white">
                     {{ t('comp.homeHero.hotPlaylists') }}
                   </h3>
-                  <p class="mt-0.5 text-sm text-white/70">
+                  <p class="playlist-description mt-0.5 text-sm text-white/70">
                     {{ t('comp.homeHero.discoverNewReleases') }}
                   </p>
                 </div>
@@ -663,12 +663,13 @@ onActivated(() => {
 
 /* Hero grid — left wider, right narrower, equal row height */
 .hero-grid {
-  grid-template-columns: 3fr 2fr;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
 }
 
 /* Cards fill grid row height equally */
 .hero-grid > .hero-card {
   height: 100%;
+  min-width: 0;
 }
 .hero-grid > .hero-card > .daily-card,
 .hero-grid > .hero-card > .fm-card {
@@ -714,6 +715,47 @@ onActivated(() => {
 /* FM cover — sized relative to card, leaving padding space */
 .fm-cover {
   height: calc(100% - 6px);
+}
+
+@media (max-width: 767px) {
+  .hero-section { min-width: 0; max-width: 100%; }
+  .hero-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hero-grid > .hero-card { aspect-ratio: 1; height: auto; }
+  .hero-grid > .skeleton-shimmer { aspect-ratio: 1; height: auto !important; }
+  .hero-grid > .hero-card > .daily-card,
+  .hero-grid > .hero-card > .fm-card {
+    width: 100%; height: 100%; min-height: 0; max-height: none;
+  }
+  .daily-card .daily-content { padding: 12px; }
+  .daily-card .daily-title { font-size: clamp(16px, 4.6vw, 20px); letter-spacing: .02em; white-space: nowrap; }
+  .daily-card .daily-footer { justify-content: flex-end; gap: 0; }
+  .fm-player-card .fm-content { padding: 0; gap: 0; }
+  .fm-player-card .fm-cover {
+    position: absolute; inset: 0; width: 100%; height: 100%; border-radius: inherit;
+  }
+  .fm-player-card .fm-details {
+    position: absolute; inset: 0; z-index: 1; padding: 10px;
+    justify-content: flex-end;
+    background: linear-gradient(180deg, rgb(0 0 0 / .1) 20%, rgb(0 0 0 / .8) 100%);
+  }
+  .fm-player-card .fm-details h3 { font-size: 14px; line-height: 1.3; }
+  .fm-player-card .fm-details p { font-size: 11px; line-height: 1.3; }
+  .fm-player-card .fm-controls-row { margin-top: 4px; }
+  .fm-player-card .fm-controls { width: 100%; justify-content: space-between; gap: 0; }
+  .fm-player-card .fm-controls button { width: 44px; height: 44px; flex-shrink: 0; }
+  .fm-player-card .fm-badge {
+    position: absolute; top: 10px; left: 10px; padding: 3px 6px;
+    border-radius: 6px; background: rgb(0 0 0 / .3); color: white;
+    white-space: nowrap; font-size: 10px;
+  }
+  .playlist-hero-card .playlist-content { padding: 12px; }
+  .playlist-hero-card .playlist-footer { gap: 8px; }
+  .playlist-hero-card .playlist-footer h3 { font-size: 16px; white-space: nowrap; }
+  .playlist-hero-card .playlist-footer > div:last-child { width: 32px; height: 32px; }
+  .playlist-hero-card .playlist-description { display: none; }
+}
+@media (max-width: 359px) {
+  .fm-player-card .fm-controls button:first-child { display: none; }
 }
 
 /* FM equalizer bars */

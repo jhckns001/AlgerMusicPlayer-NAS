@@ -61,6 +61,7 @@ export type LxRequestData = {
  * 需要从 SongResult 转换而来
  */
 export type LxMusicInfo = {
+  [key: string]: unknown;
   songmid: string | number;
   name: string;
   singer: string;

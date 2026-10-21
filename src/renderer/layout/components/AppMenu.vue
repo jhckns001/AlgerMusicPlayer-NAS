@@ -149,15 +149,21 @@ const toggleMenu = () => {
 
 .app-menu-item-link,
 .app-menu-header {
-  @apply flex items-center w-[200px] overflow-hidden ml-2 px-5;
+  @apply flex items-center w-full min-w-0 overflow-hidden px-5;
+  box-sizing: border-box;
 }
 
 .app-menu-header {
-  @apply ml-1;
+  @apply justify-center;
 }
 
 .app-menu-item-link {
-  @apply mb-6 mt-6;
+  @apply mb-6 mt-6 justify-center;
+  min-height: 44px;
+}
+
+.app-menu-expanded .app-menu-item-link {
+  justify-content: flex-start;
 }
 
 .app-menu-item-icon {

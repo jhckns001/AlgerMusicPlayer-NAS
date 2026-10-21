@@ -4,7 +4,9 @@
  * 实现 MusicSourceStrategy 接口，作为落雪音源的解析入口
  */
 
-import { getLxMusicRunner, initLxMusicRunner } from '@/services/LxMusicSourceRunner';
+import { LxMusicSourceRunner, getLxMusicRunner, initLxMusicRunner } from '@/services/LxMusicSourceRunner';
+import { lxCandidates, resolveLxFailover } from '@/services/lxFailover';
+import { isNasMode, nasAudioUrl, nasLastLxResolution } from '@/services/nasClient';
 import { useSettingsStore } from '@/store';
 import type { LxMusicInfo, LxQuality, LxSourceKey } from '@/types/lxMusic';
 import { LX_SOURCE_NAMES, QUALITY_TO_LX } from '@/types/lxMusic';
@@ -23,6 +25,10 @@ import { CacheManager } from './musicParser';
  * 且后续策略如 unblockMusic 永远没有机会接手）
  */
 const resolveAudioUrl = async (url: string): Promise<string | null> => {
+  if (isNasMode) {
+    const result = await nasAudioUrl(url, 'auto');
+    return new URL(result.url, window.location.origin).href;
+  }
   // 检查是否看起来像 API 端点（包含 /api/ 且有查询参数）
   const isApiEndpoint = url.includes('/api/') || (url.includes('?') && url.includes('type=url'));
 
@@ -151,6 +157,7 @@ export class LxMusicStrategy {
     if (!sources.includes('lxMusic')) {
       return false;
     }
+    if (isNasMode) return lxCandidates(settingsStore?.setData || {}).length > 0;
 
     // 检查是否有激活的音源
     const activeLxApiId = settingsStore?.setData?.activeLxMusicApiId;
@@ -175,12 +182,30 @@ export class LxMusicStrategy {
     _sources?: string[]
   ): Promise<MusicParseResult | null> {
     // 检查失败缓存
-    if (CacheManager.isInFailedCache(id, this.name)) {
+    if (!isNasMode && CacheManager.isInFailedCache(id, this.name)) {
       return null;
     }
 
     try {
       const settingsStore = useSettingsStore();
+
+      if (isNasMode) {
+        const resolved = await resolveLxFailover({
+          settings: settingsStore.setData,
+          musicInfo: convertToLxMusicInfo(data),
+          quality: QUALITY_TO_LX[quality || 'lossless'] || 'flac',
+          createRunner: script => new LxMusicSourceRunner(script.script),
+          probe: async (raw, target, signal) => {
+            const audio = await nasAudioUrl(raw, target, signal);
+            return new URL(audio.url, window.location.origin).href;
+          }
+        });
+        nasLastLxResolution.value = { song: data.name, source: resolved.scriptName, quality: resolved.quality };
+        return { data: { code: 200, message: 'success', data: {
+          url: resolved.url, source: 'lx-wy', quality: resolved.quality,
+          lxScriptId: resolved.scriptId, lxScriptName: resolved.scriptName
+        } } };
+      }
 
       // 获取激活的音源 ID
       const activeLxApiId = settingsStore.setData?.activeLxMusicApiId;

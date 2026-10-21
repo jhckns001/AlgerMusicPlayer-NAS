@@ -5,6 +5,22 @@
     @close="handleCancel"
   >
     <div class="flex flex-col h-full">
+      <div v-if="isNasMode" class="mb-3 space-y-2 text-sm">
+        <p :class="nasConnected ? 'text-emerald-600' : 'text-gray-500'">
+          {{ nasConnected ? '已连接，音源配置保存在本实例中' : '连接播放器服务后可导入和同步音源' }}
+        </p>
+        <div v-if="nasAuthRequired" class="flex gap-2 min-w-0">
+          <input v-model="nasKey" type="password" autocomplete="current-password"
+            aria-label="播放器访问密钥" placeholder="本实例的访问密钥"
+            class="min-w-0 flex-1 rounded-lg border border-gray-200 dark:border-white/10 bg-transparent px-3 py-2"
+            @keyup.enter="handleNasConnect" />
+          <button class="shrink-0 rounded-lg bg-emerald-500 px-3 py-2 text-white disabled:opacity-50"
+            :disabled="nasConnecting" @click="handleNasConnect">
+            {{ nasConnecting ? '连接中…' : '连接播放器服务' }}
+          </button>
+        </div>
+        <p v-if="nasSyncError" role="alert" class="text-red-500">{{ nasSyncError }}</p>
+      </div>
       <!-- Tabs Header -->
       <div class="flex p-0.5 mb-3 bg-gray-100 dark:bg-white/5 rounded-lg shrink-0">
         <button
@@ -104,6 +120,20 @@
 
             <!-- LX Music Management Tab -->
             <div v-else-if="activeTab === 'lxMusic'" class="space-y-3 pb-2">
+              <div v-if="isNasMode" class="rounded-xl bg-gray-50 dark:bg-white/5 p-3 space-y-2">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-sm font-medium">自动切换音源</span>
+                  <n-switch :value="lxAutoSwitch" size="small" aria-label="自动切换音源"
+                    @update:value="setLxAutoSwitch" />
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  {{ lxAutoSwitch ? '勾选参与切换的音源，用上下箭头调整优先级。先按顺序尝试设置的音质（默认 FLAC），全部失败再逐级降低。' : '只使用选中的音源，不可用时自动降低音质。' }}
+                  设置自动保存；单次尝试最多 12 秒，每首歌总等待最多 45 秒。
+                </p>
+                <p v-if="nasLastLxResolution" class="text-xs text-emerald-600 dark:text-emerald-400 break-words">
+                  最近解析：{{ nasLastLxResolution.song }} · {{ nasLastLxResolution.source }} · 请求音质 {{ nasLastLxResolution.quality.toUpperCase() }}
+                </p>
+              </div>
               <div class="flex justify-between items-center mb-1">
                 <h3 class="text-xs font-medium text-gray-500 dark:text-gray-400">
                   {{ t('settings.playback.lxMusic.scripts.title') }}
@@ -118,23 +148,24 @@
               </div>
 
               <!-- Script List -->
-              <div v-if="lxMusicApis.length > 0" class="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div v-if="lxMusicApis.length > 0" class="grid grid-cols-1 gap-2" :class="{ 'md:grid-cols-3': !isNasMode }">
                 <div
-                  v-for="api in lxMusicApis"
+                  v-for="(api, apiIndex) in lxMusicApis"
                   :key="api.id"
                   class="flex items-center p-2.5 rounded-xl border transition-all duration-200"
                   :class="[
-                    activeLxApiId === api.id
+                    isLxSelected(api)
                       ? 'bg-emerald-50/50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
                       : 'bg-white dark:bg-white/5 border-gray-100 dark:border-white/5'
                   ]"
                 >
                   <div class="relative flex items-center justify-center w-4 h-4 mr-3">
                     <input
-                      type="radio"
-                      :checked="activeLxApiId === api.id"
+                      :type="isNasMode && lxAutoSwitch ? 'checkbox' : 'radio'"
+                      :aria-label="`${isNasMode && lxAutoSwitch ? '启用音源' : '选择音源'} ${api.name}`"
+                      :checked="isLxSelected(api)"
                       class="peer appearance-none w-4 h-4 rounded-full border border-gray-300 dark:border-gray-600 checked:border-emerald-500 checked:bg-emerald-500 transition-colors cursor-pointer"
-                      @change="setActiveLxApi(api.id)"
+                      @change="isNasMode && lxAutoSwitch ? toggleLxEnabled(api.id) : setActiveLxApi(api.id)"
                     />
                     <i
                       class="ri-check-line absolute text-white text-[10px] pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity"
@@ -167,6 +198,9 @@
                       </button>
                     </div>
                     <div class="flex items-center gap-2 mt-0.5">
+                      <span v-if="isNasMode" class="text-[10px] text-gray-500">
+                        优先级 {{ apiIndex + 1 }}{{ activeLxApiId === api.id ? ' · 首选' : '' }}
+                      </span>
                       <span
                         v-if="api.info.version"
                         class="text-[10px] text-gray-500 bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded"
@@ -176,8 +210,17 @@
                     </div>
                   </div>
 
+                  <div v-if="isNasMode" class="flex shrink-0">
+                    <button class="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-25"
+                      :aria-label="`提高 ${api.name} 优先级`" :disabled="apiIndex === 0"
+                      @click="moveLxApi(api.id, -1)"><i class="ri-arrow-up-line" /></button>
+                    <button class="w-8 h-8 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 disabled:opacity-25"
+                      :aria-label="`降低 ${api.name} 优先级`" :disabled="apiIndex === lxMusicApis.length - 1"
+                      @click="moveLxApi(api.id, 1)"><i class="ri-arrow-down-line" /></button>
+                  </div>
                   <button
                     class="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                    :aria-label="`删除音源 ${api.name}`"
                     @click="removeLxApi(api.id)"
                   >
                     <i class="ri-delete-bin-line text-sm"></i>
@@ -289,6 +332,8 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 import ResponsiveModal from '@/components/common/ResponsiveModal.vue';
+import { connectNas, importNasScript, isNasMode, nasConnected, nasAuthRequired, nasSyncError, nasHttpRequest, refreshNasConnection, nasLastLxResolution } from '@/services/nasClient';
+import { orderedLxScripts } from '@/services/lxFailover';
 import {
   initLxMusicRunner,
   parseScriptInfo,
@@ -321,18 +366,53 @@ const visible = ref(props.show);
 const selectedSources = ref<Platform[]>([...props.sources]);
 const activeTab = ref('sources');
 const { allSources } = useMusicSources();
+const nasKey = ref('');
+const nasConnecting = ref(false);
+const handleNasConnect = async () => {
+  nasConnecting.value = true;
+  try {
+    await connectNas(nasKey.value);
+    nasKey.value = '';
+    message.success('播放器服务已连接');
+  } catch (error: any) { message.error(error.message); }
+  finally { nasConnecting.value = false; }
+};
 
 const tabs = computed(() => [
   { key: 'sources', label: t('settings.playback.lxMusic.tabs.sources') },
   { key: 'lxMusic', label: t('settings.playback.lxMusic.tabs.lxMusic') },
-  { key: 'customApi', label: t('settings.playback.lxMusic.tabs.customApi') }
+  ...(!isNasMode ? [{ key: 'customApi', label: t('settings.playback.lxMusic.tabs.customApi') }] : [])
 ]);
 
 // 落雪音源列表（从 store 中的脚本解析）
 const lxMusicApis = computed<LxMusicScriptConfig[]>(() => {
   const scripts = settingsStore.setData.lxMusicScripts || [];
-  return scripts;
+  return isNasMode ? orderedLxScripts(settingsStore.setData) : scripts;
 });
+
+const lxAutoSwitch = computed(() => settingsStore.setData.lxAutoSwitch !== false);
+const isLxSelected = (api: LxMusicScriptConfig) => isNasMode && lxAutoSwitch.value ?
+  api.enabled !== false : activeLxApiId.value === api.id;
+
+const saveNasLxOrder = (scripts: LxMusicScriptConfig[], order: string[]) => {
+  const first = order.map(id => scripts.find(api => api.id === id))
+    .find(api => api && api.enabled !== false && api.sources.some(source => ['wy', 'tx', 'kg'].includes(source)));
+  settingsStore.setSetData({ lxMusicScripts: scripts, lxMusicPriority: order,
+    activeLxMusicApiId: first?.id || null });
+  if (first && !selectedSources.value.includes('lxMusic')) selectedSources.value.push('lxMusic');
+};
+const setLxAutoSwitch = (value: boolean) => settingsStore.setSetData({ lxAutoSwitch: value });
+const toggleLxEnabled = (id: string) => {
+  const scripts = lxMusicApis.value.map(api => api.id === id ? { ...api, enabled: api.enabled === false } : api);
+  saveNasLxOrder(scripts, scripts.map(api => api.id));
+};
+const moveLxApi = (id: string, direction: number) => {
+  const order = lxMusicApis.value.map(api => api.id);
+  const index = order.indexOf(id), target = index + direction;
+  if (index < 0 || target < 0 || target >= order.length) return;
+  [order[index], order[target]] = [order[target], order[index]];
+  saveNasLxOrder(lxMusicApis.value, order);
+};
 
 // 当前激活的音源 ID
 const activeLxApiId = computed<string | null>({
@@ -430,6 +510,13 @@ const importPlugin = async () => {
  */
 const importLxMusicScript = async () => {
   try {
+    if (isNasMode) {
+      if (!nasConnected.value) await refreshNasConnection();
+      if (!nasConnected.value) throw new Error('请先输入本实例的访问密钥连接播放器服务');
+      const content = await importNasScript();
+      if (content) await addLxMusicScript(content);
+      return;
+    }
     const result = await window.api.importLxMusicScript();
     if (result && result.content) {
       await addLxMusicScript(result.content);
@@ -452,6 +539,9 @@ const addLxMusicScript = async (scriptContent: string) => {
     const runner = await initLxMusicRunner(scriptContent);
     const sources = runner.getSources();
     const sourceKeys = Object.keys(sources) as LxSourceKey[];
+    if (isNasMode && !sourceKeys.some(source => ['wy', 'tx', 'kg'].includes(source))) {
+      throw new Error('此脚本没有提供网易云、QQ 或酷狗的可用音源');
+    }
 
     // 生成唯一 ID
     const id = `lx_api_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -470,10 +560,10 @@ const addLxMusicScript = async (scriptContent: string) => {
     // 添加到列表
     const scripts = [...(settingsStore.setData.lxMusicScripts || []), newApiConfig];
 
-    settingsStore.setSetData({
-      lxMusicScripts: scripts,
-      activeLxMusicApiId: id // 自动激活新添加的音源
-    });
+    if (isNasMode) {
+      // New scripts join as backups. Importing one does not silently change the first choice.
+      saveNasLxOrder(scripts, [...lxMusicApis.value.map(api => api.id), id]);
+    } else settingsStore.setSetData({ lxMusicScripts: scripts, activeLxMusicApiId: id });
 
     message.success(`${t('common.success')}：${scriptInfo.name}`);
 
@@ -494,6 +584,12 @@ const setActiveLxApi = async (apiId: string) => {
   const api = lxMusicApis.value.find((a: LxMusicScriptConfig) => a.id === apiId);
   if (!api) {
     message.error(t('settings.playback.lxMusic.scripts.notFound'));
+    return;
+  }
+
+  if (isNasMode) {
+    const scripts = lxMusicApis.value.map(item => item.id === apiId ? { ...item, enabled: true } : item);
+    saveNasLxOrder(scripts, [apiId, ...scripts.filter(item => item.id !== apiId).map(item => item.id)]);
     return;
   }
 
@@ -530,6 +626,12 @@ const removeLxApi = (apiId: string) => {
 
   const removedScript = scripts[index];
   scripts.splice(index, 1);
+
+  if (isNasMode) {
+    saveNasLxOrder(scripts, lxMusicApis.value.filter(api => api.id !== apiId).map(api => api.id));
+    message.success(t('settings.playback.lxMusic.scripts.deleted', { name: removedScript.name }));
+    return;
+  }
 
   // 更新 store
   settingsStore.setSetData({
@@ -577,12 +679,17 @@ const importLxMusicScriptFromUrl = async () => {
 
   try {
     // 下载脚本内容
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    let content: string;
+    if (isNasMode) {
+      const response = await nasHttpRequest(url, { method: 'GET' });
+      if (response.statusCode !== 200 || typeof response.body !== 'string')
+        throw new Error(`脚本下载失败 (${response.statusCode})`);
+      content = response.body;
+    } else {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      content = await response.text();
     }
-
-    const content = await response.text();
 
     // 验证脚本格式 - 检查是否包含 lx-music 脚本的特征
     // 1. 检查是否有头部注释块（包含 @name、@version 等）
@@ -653,7 +760,7 @@ const saveScriptName = (apiId: string) => {
  * 确认选择
  */
 const handleConfirm = () => {
-  const defaultPlatforms: Platform[] = ['migu', 'kugou', 'kuwo', 'pyncmd'];
+  const defaultPlatforms: Platform[] = isNasMode ? ['lxMusic'] : ['migu', 'kugou', 'kuwo', 'pyncmd'];
   const valuesToEmit =
     selectedSources.value.length > 0 ? [...new Set(selectedSources.value)] : defaultPlatforms;
   emit('update:sources', valuesToEmit);

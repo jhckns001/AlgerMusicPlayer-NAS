@@ -3,6 +3,7 @@ import { useSettingsStore, useUserStore } from '@/store';
 import type { ILyric } from '@/types/lyric';
 import type { SongResult } from '@/types/music';
 import request from '@/utils/request';
+import { isNasMode, nasRequest } from '@/services/nasClient';
 
 import { MusicParser, type MusicParseResult } from './musicParser';
 
@@ -60,7 +61,10 @@ export const getMusicDetail = (ids: Array<number>) => {
 };
 
 // 根据音乐Id获取音乐歌词
-export const getMusicLrc = async (id: number): Promise<{ data: ILyric }> => {
+export const getMusicLrc = async (id: number | string): Promise<{ data: ILyric }> => {
+  const foreign = /^(qq|kugou|kuwo|migu):(.+)$/.exec(String(id));
+  if (isNasMode && foreign) return { data: await nasRequest<ILyric>(
+    `catalog/lyric?${new URLSearchParams({ platform: foreign[1], id: foreign[2] })}`) };
   const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000; // 10天的毫秒数
 
   try {

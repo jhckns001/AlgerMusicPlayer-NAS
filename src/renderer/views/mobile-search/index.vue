@@ -24,7 +24,8 @@
     </div>
 
     <!-- 搜索类型标签 -->
-    <div class="search-types">
+    <catalog-search-panel v-if="isNasMode" :show-input="false" class="px-4 pt-4" />
+    <div v-else class="search-types">
       <div
         v-for="type in searchTypes"
         :key="type.key"
@@ -104,6 +105,8 @@ import { getHotSearch, getSearchKeyword } from '@/api/home';
 import { getSearchSuggestions } from '@/api/search';
 import { SEARCH_TYPES } from '@/const/bar-const';
 import { useSearchStore } from '@/store/modules/search';
+import { isNasMode } from '@/services/nasClient';
+import CatalogSearchPanel from '@/components/common/CatalogSearchPanel.vue';
 
 const { t, locale } = useI18n();
 const router = useRouter();
@@ -234,7 +237,8 @@ const handleSearch = () => {
     path: '/mobile-search-result',
     query: {
       keyword,
-      type: searchType.value
+      type: isNasMode ? searchStore.searchType : searchType.value,
+      ...(isNasMode ? { platform: searchStore.searchPlatform } : {})
     }
   });
 };

@@ -7,7 +7,8 @@ import { defineConfig } from 'vite';
 import viteCompression from 'vite-plugin-compression';
 import VueDevTools from 'vite-plugin-vue-devtools';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  envDir: resolve('.'),
   base: './',
   // 项目src
   root: resolve('src/renderer'),
@@ -36,6 +37,8 @@ export default defineConfig({
   ],
   publicDir: resolve('resources'),
   build: {
+    // Open NAS tabs can still request lazy chunks from the previous build.
+    emptyOutDir: mode !== 'nas',
     // MusicHook 等模块使用顶层 await，默认 target(es2020) 无法转译导致 web 构建失败
     target: 'es2022'
   },
@@ -43,4 +46,4 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {}
   }
-});
+}));

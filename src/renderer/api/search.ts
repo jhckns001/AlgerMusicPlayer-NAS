@@ -1,16 +1,23 @@
 import { isElectron } from '@/utils';
 import request from '@/utils/request';
+import { isNasMode, nasRequest } from '@/services/nasClient';
 
 interface IParams {
   keywords: string;
   type: number;
   limit?: number;
   offset?: number;
+  platform?: string;
 }
 // 搜索内容
-export const getSearch = (params: IParams) => {
+export const getSearch = async (params: IParams, signal?: AbortSignal) => {
+  if (isNasMode && params.platform && params.platform !== 'netease') {
+    const query = new URLSearchParams({ platform: params.platform, type: String(params.type),
+      keyword: params.keywords, limit: String(params.limit || 30), offset: String(params.offset || 0) });
+    return { data: await nasRequest<any>(`catalog/search?${query}`, undefined, 'GET', signal) };
+  }
   return request.get<any>('/cloudsearch', {
-    params
+    params: { keywords: params.keywords, type: params.type, limit: params.limit, offset: params.offset }, signal
   });
 };
 

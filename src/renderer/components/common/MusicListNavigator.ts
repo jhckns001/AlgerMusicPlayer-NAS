@@ -1,6 +1,8 @@
 import { Router } from 'vue-router';
 
 import { useMusicStore } from '@/store/modules/music';
+import { catalogLocation } from '@/services/musicCatalog';
+import { isNasMode } from '@/services/nasClient';
 
 /**
  * 导航到音乐列表页面的通用方法
@@ -18,6 +20,8 @@ export function navigateToMusicList(
     canRemove?: boolean;
   }
 ) {
+  const foreign = isNasMode && catalogLocation(options.id || '', options.type || 'album');
+  if (foreign) { router.push(foreign); return; }
   const musicStore = useMusicStore();
   const { id, type, name, songList, listInfo, canRemove = false } = options;
 

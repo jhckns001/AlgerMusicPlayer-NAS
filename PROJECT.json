@@ -1,6 +1,6 @@
 {
   "name": "alger-music-nas",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "unofficialDerivative": true,
   "upstream": "https://github.com/algerkong/AlgerMusicPlayer",
   "upstreamCommit": "b15617ce8652e12a4314be66e2c35ff1f7602a10",

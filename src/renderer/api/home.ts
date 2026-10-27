@@ -46,6 +46,11 @@ export const getDayRecommend = () => {
   return request.get<IData<IData<IDayRecommend>>>('/recommend/songs');
 };
 
+// Personalized daily playlists require an authenticated NetEase account.
+export const getDailyRecommendPlaylists = () => {
+  return request.get<{ code: number; recommend: any[] }>('/recommend/resource');
+};
+
 // 获取最新专辑推荐
 export const getNewAlbum = () => {
   return request.get<IAlbumNew>('/album/newest');

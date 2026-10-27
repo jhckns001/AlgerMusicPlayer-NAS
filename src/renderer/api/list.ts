@@ -26,6 +26,10 @@ export function getListByCat(params: IListByCatParams) {
   });
 }
 
+export function getPlaylistSquare(params: { cat?: string; limit: number; before?: number }) {
+  return request.get('/top/playlist/highquality', { params });
+}
+
 // 获取推荐歌单
 export function getRecommendList(limit: number = 30) {
   return request.get('/personalized', { params: { limit } });

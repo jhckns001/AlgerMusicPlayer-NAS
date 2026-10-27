@@ -2,7 +2,7 @@
   <sticky-tab-page
     ref="pageRef"
     :title="listTitle"
-    :description="currentType === DEFAULT_CAT ? '来自网易云的个人歌单推荐' : t('comp.pages.list.desc')"
+    :description="currentType === DEFAULT_CAT ? '精选好歌单，发现更多音乐' : t('comp.pages.list.desc')"
     :model-value="currentType"
     :categories="playlistCategory?.sub || []"
     label-key="name"
@@ -12,8 +12,8 @@
   >
     <div v-if="loadError" role="alert" class="mb-6 rounded-2xl bg-neutral-100 dark:bg-neutral-900 p-5 text-neutral-600 dark:text-neutral-300">
       <p>{{ loadError }}</p>
-      <button class="mt-3 text-primary font-semibold" @click="needsLogin ? router.push('/login') : loadList(currentType)">
-        {{ needsLogin ? '去登录' : '重试' }}
+      <button class="mt-3 text-primary font-semibold" @click="loadList(currentType)">
+        重试
       </button>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
@@ -99,44 +99,42 @@ import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, react
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 
-import { getDailyRecommendPlaylists, getPlaylistCategory } from '@/api/home';
-import { getListByCat } from '@/api/list';
+import { getPlaylistCategory } from '@/api/home';
+import { getListByCat, getPlaylistSquare } from '@/api/list';
 import { navigateToMusicList } from '@/components/common/MusicListNavigator';
 import StickyTabPage from '@/components/common/StickyTabPage.vue';
-import { useUserStore } from '@/store/modules/user';
 import type { IPlayListSort } from '@/types/playlist';
 import { calculateAnimationDelay, formatNumber, getImgUrl } from '@/utils';
 
 defineOptions({ name: 'List' });
 const { t } = useI18n();
 const TOTAL_ITEMS = 42;
-const DEFAULT_CAT = '每日推荐';
-const DAILY_MAX_AGE = 15 * 60 * 1000;
+const DEFAULT_CAT = '歌单广场';
+const normalizeType = (value?: string) => !value || value === '每日推荐' ? DEFAULT_CAT : value;
+const LIST_MAX_AGE = 15 * 60 * 1000;
 const route = useRoute();
 const router = useRouter();
-const userStore = useUserStore();
-const currentType = ref((route.query.type as string) || DEFAULT_CAT);
-const listTitle = ref(currentType.value === DEFAULT_CAT ? t('comp.pages.list.dailyRecommend') : currentType.value);
+const currentType = ref(normalizeType(route.query.type as string));
+const listTitle = ref(currentType.value === DEFAULT_CAT ? DEFAULT_CAT : currentType.value);
 const recommendList = ref<any[]>([]);
 const page = ref(0);
 const hasMore = ref(true);
 const loading = ref(false);
 const isLoadingMore = ref(false);
 const loadError = ref('');
-const needsLogin = ref(false);
+const squareCursor = ref(0);
 const animatedIds = reactive(new Set<number>());
 const pageRef = ref();
 const playlistCategory = ref<IPlayListSort>();
 let generation = 0;
 let active = false;
-let lastDailyKey = '';
-let lastDailyFetch = 0;
+let lastSquareKey = '';
+let lastSquareFetch = 0;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 
-const accountKey = () => `${userStore.user?.userId || ''}:${userStore.loginType || ''}`;
-const dailyKey = () => {
+const squareKey = () => {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
-  return `${parts.filter(part => part.type !== 'literal').map(part => part.value).join('-')}:${accountKey()}`;
+  return `${parts.filter(part => part.type !== 'literal').map(part => part.value).join('-')}`;
 };
 const uniquePlaylists = (items: any[]) => [...new Map(items.map(item => [item.id, item])).values()];
 
@@ -145,18 +143,17 @@ const openPlaylist = (item: any) => navigateToMusicList(router, {
 });
 
 const loadList = async (type: string, isLoadMore = false) => {
-  if (isLoadMore && (type === DEFAULT_CAT || !hasMore.value || loading.value || isLoadingMore.value)) return;
+  type = normalizeType(type);
+  if (isLoadMore && (!hasMore.value || loading.value || isLoadingMore.value)) return;
   const request = isLoadMore ? generation : ++generation;
-  const account = accountKey();
-  const key = dailyKey();
-  const current = () => request === generation && type === currentType.value &&
-    (type !== DEFAULT_CAT || account === accountKey());
+  const key = squareKey();
+  const current = () => request === generation && type === currentType.value;
   if (isLoadMore) isLoadingMore.value = true;
   else {
     loading.value = true;
     isLoadingMore.value = false;
     loadError.value = '';
-    needsLogin.value = false;
+    squareCursor.value = 0;
     page.value = 0;
     hasMore.value = true;
     recommendList.value = [];
@@ -167,21 +164,18 @@ const loadList = async (type: string, isLoadMore = false) => {
   }
   try {
     if (type === DEFAULT_CAT) {
-      const authenticated = userStore.user && ['qr', 'cookie', 'token'].includes(userStore.loginType || '') &&
-        Boolean(localStorage.getItem('token')?.trim());
-      if (!authenticated) {
-        needsLogin.value = true;
-        loadError.value = '请使用扫码或 Cookie 登录网易云，查看个人每日推荐歌单；UID 登录不支持此功能。';
-        hasMore.value = false;
-        return;
-      }
-      const { data } = await getDailyRecommendPlaylists();
+      const previousCursor = squareCursor.value;
+      const { data } = await getPlaylistSquare({ cat: '全部', limit: TOTAL_ITEMS, before: isLoadMore ? previousCursor : 0 });
       if (!current()) return;
-      if (data.code !== 200 || !Array.isArray(data.recommend)) throw new Error('Invalid daily recommendation response');
-      recommendList.value = uniquePlaylists(data.recommend);
-      hasMore.value = false;
-      lastDailyKey = key;
-      lastDailyFetch = Date.now();
+      if (data.code !== 200 || !Array.isArray(data.playlists)) throw new Error('Invalid playlist square response');
+      recommendList.value = uniquePlaylists(isLoadMore ? [...recommendList.value, ...data.playlists] : data.playlists);
+      const nextCursor = Number(data.lasttime || data.playlists.at(-1)?.updateTime || 0);
+      hasMore.value = Boolean(data.more) && data.playlists.length > 0 && nextCursor > 0 &&
+        (previousCursor === 0 || nextCursor < previousCursor);
+      squareCursor.value = nextCursor;
+      page.value++;
+      lastSquareKey = key;
+      lastSquareFetch = Date.now();
     } else {
       const { data } = await getListByCat({ cat: type, limit: TOTAL_ITEMS, offset: page.value * TOTAL_ITEMS });
       if (!current()) return;
@@ -192,7 +186,7 @@ const loadList = async (type: string, isLoadMore = false) => {
     }
   } catch (error) {
     if (current()) {
-      loadError.value = type === DEFAULT_CAT ? '每日推荐暂时获取失败，请确认网易云登录有效后重试。' : '歌单加载失败，请重试。';
+      loadError.value = '歌单加载失败，请重试。';
       console.error('加载歌单列表失败:', error);
     }
   } finally {
@@ -201,13 +195,13 @@ const loadList = async (type: string, isLoadMore = false) => {
 };
 
 const ensureFresh = () => {
-  if (!active || route.path !== '/list' || document.visibilityState === 'hidden' || loading.value) return;
+  if (!active || route.path !== '/list' || document.visibilityState === 'hidden' || loading.value || isLoadingMore.value) return;
   if (currentType.value === DEFAULT_CAT) {
-    if (lastDailyKey !== dailyKey() || Date.now() - lastDailyFetch >= DAILY_MAX_AGE) void loadList(DEFAULT_CAT);
+    if (lastSquareKey !== squareKey() || Date.now() - lastSquareFetch >= LIST_MAX_AGE) void loadList(DEFAULT_CAT);
   } else if (!recommendList.value.length && !loadError.value) void loadList(currentType.value);
 };
 const handleScroll = (event: any) => {
-  if (currentType.value === DEFAULT_CAT || loading.value || isLoadingMore.value || !hasMore.value) return;
+  if (loading.value || isLoadingMore.value || !hasMore.value) return;
   const { scrollTop, scrollHeight, clientHeight } = event.target;
   if (scrollTop + clientHeight >= scrollHeight - 100) void loadList(currentType.value, true);
 };
@@ -243,16 +237,12 @@ onBeforeUnmount(() => {
 
 watch(() => route.query, params => {
   if (route.path !== '/list') return;
-  const type = (params.type as string) || DEFAULT_CAT;
+  const type = normalizeType(params.type as string);
   if (type !== currentType.value) {
     currentType.value = type;
-    listTitle.value = type === DEFAULT_CAT ? t('comp.pages.list.dailyRecommend') : type;
+    listTitle.value = type === DEFAULT_CAT ? DEFAULT_CAT : type;
     void loadList(type);
   }
-});
-watch(() => [userStore.user?.userId, userStore.loginType], () => {
-  lastDailyKey = '';
-  if (active && currentType.value === DEFAULT_CAT) void loadList(DEFAULT_CAT);
 });
 </script>
 

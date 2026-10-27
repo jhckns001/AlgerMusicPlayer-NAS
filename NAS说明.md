@@ -1,6 +1,6 @@
 # NAS 部署说明
 
-本分支基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 5.1.0，基线提交 `b15617ce8652e12a4314be66e2c35ff1f7602a10`。NAS 版本为 0.3.6。
+本分支基于 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) 5.1.0，基线提交 `b15617ce8652e12a4314be66e2c35ff1f7602a10`。NAS 版本为 0.3.7。
 
 ## 安装入口
 
@@ -45,9 +45,9 @@ NAS_PUBLIC_ORIGINS=https://music.example.com:18443
 
 心动模式使用网易云账号的“我喜欢的音乐”作为推荐依据，需要账号已有喜欢歌曲及有效扫码或 Cookie 登录。UID 登录不具备完整账号权限。手机与电脑的登录分别保存在各自浏览器中。
 
-## 个人推荐歌单
+## 歌单广场
 
-歌单页的“每日推荐”读取当前网易云账号的个人推荐，需要有效扫码或 Cookie 登录。UID 登录不支持。跨天、返回页面时自动检查，页面停留期间最长 15 分钟重新读取一次，后台不请求。网易云可能连续推荐部分相同歌单；程序不会打乱热门榜伪造每日更新。
+“歌单”页默认入口为“歌单广场”，展示网易云精品歌单，不要求个人账号登录。使用时间游标分页，保留其他分类的浏览与分页；旧“每日推荐”链接自动进入广场。首页及其个人推荐保持原样，不增加额外分区。
 
 ## 搜索和播放
 

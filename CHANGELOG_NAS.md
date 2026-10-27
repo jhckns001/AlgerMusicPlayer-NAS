@@ -2,6 +2,15 @@
 
 这里记录相对 [Alger / algerkong](https://github.com/algerkong) 的 [AlgerMusicPlayer](https://github.com/algerkong/AlgerMusicPlayer) `5.1.0 / b15617ce` 的改动。版本号 `0.x` 是 NAS 适配版本，不是上游播放器版本。
 
+## 0.3.7
+
+### 修改
+
+- 按用户要求，将歌单页默认“每日推荐”替换为“歌单广场”，保留现有卡片布局，不增加额外分区，首页保持原样。
+- 广场接入网易云精品歌单 `/top/playlist/highquality`，不再与首页的个人推荐使用相同列表；无需扫码或 Cookie 登录。
+- 精品歌单使用 lasttime/before 游标分页，分类仍使用原有 offset 分页，列表去重，游标不前进时停止加载。
+- 兼容旧“每日推荐”链接，保留前台/跨天检查及请求失效保护。
+
 ## 0.3.6
 
 ### 修改与修复
